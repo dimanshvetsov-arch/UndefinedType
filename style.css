@@ -303,3 +303,73 @@ footer{border-top:1px solid rgba(255,255,255,.05)}
 }
 .race-marker-you .race-marker-label{color:var(--accent);}
 .race-marker-opponent .race-marker-label{color:#c6a0ff;}
+
+/* v1.7: solo-style feedback and race controls */
+.race-shared-text .race-char.race-correct{color:var(--accent)!important;opacity:1!important}
+.race-shared-text .race-char.race-error{color:#ff6375!important;background:rgba(255,99,117,.16)!important;text-decoration:underline;text-decoration-color:#ff6375;text-underline-offset:6px;opacity:1!important}
+.race-shared-viewport,.race-shared-text,.race-shared-text *{user-select:none;-webkit-user-select:none}
+.race-finish-notice{padding:12px 18px;margin:12px 0;border:1px solid #5e6269;border-radius:10px;color:var(--accent)}
+.match-scoreboard{display:grid;gap:10px;margin:20px 0}
+.match-score-row{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:15px 18px;border:1px solid #41444b;border-radius:10px;background:#222427}
+.match-score-row strong{color:var(--accent)}.match-score-row span{color:#bfc0c5}
+.mode-cards{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.mode-card select,.mode-card input{min-height:40px}
+
+
+/* v1.8 — refined competitive dashboard, with solo-style error feedback */
+.mode-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin-bottom:18px}
+.mode-card{position:relative;display:flex;flex-direction:column;gap:10px;min-height:231px;padding:22px 21px 19px;background:#25282c;border:1px solid #373b41;border-radius:16px;transition:border-color .18s,transform .18s}
+.mode-card:hover{border-color:#686a70;transform:translateY(-2px)}
+.mode-card h3{font-size:20px;letter-spacing:-.65px;margin:0;color:var(--text)}
+.mode-card p{font-size:12px;line-height:1.65;min-height:54px;margin:0;color:#acb0b9}
+.mode-card .primary{margin-top:auto;min-height:42px}
+.mode-card .mode-kicker,.room-studio .mode-kicker{font-weight:800;font-size:10px;letter-spacing:1.75px;text-transform:uppercase;color:#b8a1db}
+.card-ranked .mode-kicker{color:var(--accent)}
+.card-open .mode-kicker{color:#89c4ea}
+.mode-note{color:#8e939c;font-size:11px;margin-top:auto;margin-bottom:5px}
+.card-open #queueCount{display:block;color:#a7abb4;font-size:11px}
+.card-open .room-list{overflow:auto;max-height:210px}
+.card-open .room-list-entry{padding:10px 12px;margin:7px 0}
+.room-studio{padding:24px 25px;background:#202327;border:1px solid #3e4249;border-radius:17px}
+.room-studio-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 0 23px}
+.room-studio-heading h3{font-size:22px;margin:7px 0 5px;letter-spacing:-.55px}
+.room-studio-heading p{font-size:12px;line-height:1.6;margin:0;color:#a6aab1}
+.room-studio-symbol{font-size:35px;color:var(--accent);opacity:.7}
+.room-studio-grid{display:grid;grid-template-columns:1fr 1.35fr;gap:27px}
+.studio-label{text-transform:uppercase;color:#8f959f;letter-spacing:1.35px;font-size:10px;font-weight:800;margin-bottom:11px}
+.studio-choices{display:flex;gap:7px;flex-wrap:wrap}
+.studio-chip{border:1px solid #474c54;background:#2b2e33;color:#d0d3da;border-radius:9px;padding:11px 12px;display:inline-flex;align-items:center;gap:7px;flex:0 1 auto;font-size:13px;font-weight:700;min-height:42px}
+.studio-chip small{font-size:10px;font-weight:500;color:#9399a3}
+.studio-chip.selected{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,#27292e)}
+.studio-chip.selected small{color:#d0c9ac}
+.studio-chip:hover{border-color:#a0a4aa}
+.studio-footer{margin-top:24px;padding-top:20px;border-top:1px solid #373b41;display:flex;justify-content:space-between;align-items:center;gap:15px}
+.studio-footer #createRoom{min-width:192px;min-height:43px}
+.studio-footer .join-code{display:flex;gap:8px;align-items:center}
+.studio-footer .join-code input{background:#191b1e;color:#eceef2;border:1px solid #50545b;min-width:100px;width:180px;min-height:43px;font-size:12px}
+.studio-footer .join-code button{background:#34373e;color:#e6e7ec;border:1px solid #4c5058;min-height:43px;padding:0 17px;border-radius:9px}
+#queueIndicator{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 19px;background:color-mix(in srgb,var(--accent) 10%,#202328);border:1px solid color-mix(in srgb,var(--accent) 48%,#3f434a);border-radius:12px;margin-bottom:18px;font-size:12px}
+#queueIndicator.hidden{display:none}
+#queueIndicator span:first-child{font-size:14px;font-weight:800;color:var(--accent)}
+#queueIndicator span:nth-child(2){color:#b2b5bd}
+#queueIndicator button{margin-left:auto;border-radius:8px;background:#373b42;color:#eee}
+.race-stat-line{display:flex;justify-content:center;align-items:end;gap:33px;margin:19px auto 26px;color:var(--muted)}
+.race-stat-line>div{text-align:center}
+.race-stat-line small{display:block;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9599a2;margin-bottom:5px}
+.race-stat-line strong{display:block;font-weight:740;font-size:22px;line-height:1.1;color:#bfc3ca;font-variant-numeric:tabular-nums}
+.race-stat-line .race-time strong{font-size:35px;color:var(--accent);min-width:80px}
+.race-word.race-word-error{box-shadow:inset 0 -2px 0 rgba(255,99,117,.6);border-radius:2px}
+.race-shared-text .race-char.race-correct{color:var(--accent)!important;background:none!important}
+.race-shared-text .race-char.race-error{color:#ff6476!important;background:rgba(255,100,118,.13)!important;text-decoration:none!important}
+.race-shared-footer{font-size:11px}
+#raceResult .match-scoreboard{overflow-x:auto;margin:24px 0 14px}
+.match-score-table{border-collapse:separate;border-spacing:0;width:100%;min-width:640px;text-align:left;font-variant-numeric:tabular-nums;overflow:hidden;border:1px solid #464a51;border-radius:12px}
+.match-score-table th,.match-score-table td{padding:15px 13px;text-align:left;white-space:nowrap;border-bottom:1px solid #383b41;font-size:12px}
+.match-score-table thead th{color:#a4a9b3;font-size:10px;text-transform:uppercase;letter-spacing:1px;background:#2c2f35}
+.match-score-table tbody tr{background:#26292d}
+.match-score-table tbody tr:last-child th,.match-score-table tbody tr:last-child td{border-bottom:0}
+.match-score-table tbody tr.score-you{background:color-mix(in srgb,var(--accent) 10%,#26292d)}
+.match-score-table tbody tr.score-you th{color:var(--accent)}
+#raceResult{max-width:900px}
+@media(max-width:860px){.mode-cards{grid-template-columns:1fr 1fr}.room-studio-grid{grid-template-columns:1fr}.studio-footer{flex-wrap:wrap}}
+@media(max-width:600px){.mode-cards{grid-template-columns:1fr}.mode-card{min-height:195px}.room-studio{padding:18px}.studio-footer{flex-direction:column;align-items:stretch}.studio-footer #createRoom{width:100%}.studio-footer .join-code input{flex:1;width:100px}.race-stat-line{gap:20px}.race-stat-line strong{font-size:17px}.race-stat-line .race-time strong{font-size:28px}.race-shared-text{font-size:19px}}

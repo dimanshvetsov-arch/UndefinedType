@@ -5,8 +5,9 @@
   let socket = null, reconnectTimer = null, connected = false;
   let me = '', user = null, token = localStorage.getItem('ut_token') || '';
   let room = null, phase = 'waiting', matchText = '', startAt = 0, duration = 30, clockOffset = 0;
-  let countdownTimer = null, queued = false, typingValue = '', positions = {}, players = {};
-  let sharedChars = [], ownPainted = '', otherPainted = 0;
+  let countdownTimer = null, queued = false, queueMode = 'ranked', typingValue = '', positions = {}, players = {};
+  let audioContext = null, finishedMine = false;
+  let sharedChars = [], sharedWords = [], ownPainted = '', otherPainted = 0;
   let youPosition = 0, opponentPosition = 0;
   let markerFrame = 0;
   let lineForChar = [], lineTops = [], currentLine = 0;
@@ -155,7 +156,7 @@
     for(const r of rooms) {
       const button=document.createElement('button');button.className='room-list-entry';
       const name=document.createElement('strong');name.textContent=r.host;
-      const details=document.createElement('span');details.textContent=`${r.duration}s · ${r.players}/2 players · ${r.code}`;
+      const details=document.createElement('span');details.textContent=`${r.wordCount||80} words · ${r.players}/2 players · ${r.code}`;
       button.append(name,details);
       button.onclick=()=>send({type:'join',code:r.code});list.append(button);
     }
@@ -176,28 +177,28 @@
     item.querySelector('.race-progress-fill').style.width=`${Math.max(0,Math.min(100,p.progress||0))}%`;
     item.querySelector('small').textContent=`${p.wpm||0} WPM · ${p.accuracy??100}%`;
   }
-  // Both players use one unhighlighted passage. Only the two thin carets show their positions.
+  // Both players use one passage. Only your mistakes are marked; the opponent never paints text.
   function createSharedText() {
     const el=$('raceSharedText');
     el.querySelectorAll('.race-word,.race-end').forEach(node=>node.remove());
-    const chars=[],fragment=document.createDocumentFragment();
+    const chars=[],words=[],fragment=document.createDocumentFragment();
     for(const chunk of (matchText.match(/\S+\s*|\s+/g)||[])) {
-      const word=document.createElement('span');word.className='race-word';
+      const word=document.createElement('span');word.className='race-word';word.dataset.start=chars.length;words.push(word);
       for(const letter of chunk) {
         const span=document.createElement('span');span.className='race-char';span.textContent=letter;
         word.append(span);chars.push(span);
       }
-      fragment.append(word);
+      word.dataset.end=chars.length;fragment.append(word);
     }
     const end=document.createElement('span');end.className='race-char race-end';end.textContent='\u200b';
-    chars.push(end);fragment.append(end);el.prepend(fragment);
+    chars.push(end);fragment.append(end);el.prepend(fragment);sharedWords=words;
     return chars;
   }
   function clearSharedText() {
     $('raceSharedText').querySelectorAll('.race-word,.race-end').forEach(node=>node.remove());
     for(const id of ['raceYouMarker','raceOpponentMarker'])$(id).classList.add('hidden');
     $('raceSharedViewport').scrollTop=0;
-    sharedChars=[];ownPainted='';otherPainted=0;youPosition=0;opponentPosition=0;
+    sharedChars=[];sharedWords=[];ownPainted='';otherPainted=0;youPosition=0;opponentPosition=0;
     lineForChar=[];lineTops=[];currentLine=0;
   }
   // Measure the actual wrapped lines. This is responsive: resizing the window
@@ -248,8 +249,19 @@
   }
   function showOwnText(value) {
     if(!sharedChars.length)return;
-    // The passage itself never changes color as a player types. Keep one
-    // consistent text color; the thin yellow caret marks your position.
+    // Highlight your mistakes like solo mode, without revealing opponent keystrokes.
+    for(let i=0;i<sharedChars.length-1;i++){
+      sharedChars[i].classList.toggle('race-correct',i<value.length && value[i]===matchText[i]);
+      sharedChars[i].classList.toggle('race-error',i<value.length && value[i]!==matchText[i]);
+    }
+    // An incorrect letter also marks the entire word subtly red, like the solo test.
+    for(const word of sharedWords){
+      let wrong=false;
+      for(let i=Number(word.dataset.start);i<Math.min(Number(word.dataset.end),value.length);i++){
+        if(value[i]!==matchText[i]) {wrong=true;break;}
+      }
+      word.classList.toggle('race-word-error',wrong);
+    }
     youPosition=value.length;ownPainted=value;typingValue=value;
     scheduleMarkers();
   }
@@ -270,7 +282,9 @@
     matchText=m.text;startAt=m.startAt;duration=m.duration;
     clockOffset=Date.now()-(m.serverTime||Date.now());
     phase='countdown';typingValue='';otherPainted=0;ownPainted='';youPosition=0;opponentPosition=0;
-    positions={};
+    positions={};finishedMine=false;$('raceFinishNotice').classList.add('hidden');
+    $('raceTimeLabel').textContent='starts in';$('raceLiveWpm').textContent='0';$('raceLiveAccuracy').textContent='100%';
+    $('racePassageLength').textContent=`${matchText.trim().split(/\s+/).length} words`;
     $('raceResult').replaceChildren();
     $('raceInput').disabled=true;$('raceInput').value='';$('raceInput').maxLength=matchText.length;
     $('raceSharedViewport').scrollTop=0;
@@ -286,17 +300,17 @@
     const now=Date.now()-clockOffset;
     if(phase==='countdown') {
       const remaining=Math.max(1,Math.ceil((startAt-now)/1000));
-      $('raceCountdown').textContent=`starting in ${remaining}`;
+      $('raceCountdown').textContent=String(remaining);
     } else if(phase==='running') {
-      const remaining=Math.max(0,Math.ceil((startAt+duration*1000-now)/1000));
-      $('raceCountdown').textContent=`${remaining}s left`;
+      const elapsed=Math.max(0,Math.floor((now-startAt)/1000));
+      $('raceCountdown').textContent=`${Math.floor(elapsed/60)}:${String(elapsed%60).padStart(2,'0')}`;
     }
   }
   function startRace() {
     if(phase==='finished')return;
     phase='running';
     $('raceCountdown').classList.remove('countdown-active');
-    $('raceInput').disabled=false;
+    $('raceTimeLabel').textContent='elapsed';$('raceInput').disabled=false;
     status('Race started · follow your yellow cursor!');
     focusRace();tick();
   }
@@ -310,33 +324,55 @@
   $('raceInput').addEventListener('keydown',e=>{
     if(e.key!=='Enter')return;
     e.preventDefault();
-    if(phase!=='running')return;
+    if(phase!=='running'||finishedMine)return;
     const next=matchText[typingValue.length];
     if(next!==' '&&next!=='\n')return;
     const value=typingValue+(next==='\n'?'\n':' ');
     $('raceInput').value=value;
-    showOwnText(value);
+    showOwnText(value);playKeySound();
     send({type:'input',value});
   });
   $('raceInput').addEventListener('input',()=>{
-    if(phase!=='running') {$('raceInput').value=typingValue;return;}
+    if(phase!=='running'||finishedMine) {$('raceInput').value=typingValue;return;}
     const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
     if(val!==$('raceInput').value)$('raceInput').value=val;
-    showOwnText(val);
+    showOwnText(val);playKeySound();
     send({type:'input',value:val});
   });
+  function playKeySound(){
+    try{audioContext=audioContext||new(window.AudioContext||window.webkitAudioContext)();
+      if(audioContext.state==='suspended')audioContext.resume();
+      const o=audioContext.createOscillator(),g=audioContext.createGain();
+      o.type='triangle';o.frequency.value=360+Math.random()*90;
+      g.gain.setValueAtTime(.012,audioContext.currentTime);
+      g.gain.exponentialRampToValueAtTime(.0001,audioContext.currentTime+.028);
+      o.connect(g);g.connect(audioContext.destination);o.start();o.stop(audioContext.currentTime+.03);
+    }catch{}
+  }
   function showFinished(m) {
     phase='finished';clearInterval(countdownTimer);
     $('raceInput').disabled=true;$('raceInput').blur();
     $('raceCountdown').classList.remove('countdown-active');
-    $('raceCountdown').textContent='race complete';
+    $('raceCountdown').textContent='finished';$('raceTimeLabel').textContent='race';
     const winner=m.players.find(p=>p.id===m.winnerId);
     const mine=m.players.find(p=>p.id===me);
     const box=$('raceResult');box.replaceChildren();
     const heading=document.createElement('h2');heading.textContent=!winner?'Draw!':winner.id===me?'You won!':`${winner.name} won!`;
     const details=document.createElement('p');
-    details.textContent=`${mine?.wpm||0} WPM · ${mine?.accuracy??100}% accuracy · ${mine?.correct||0} correct characters`;
+    details.textContent=`${m.reason==='forfeit'?'A player left the race.':'Both players completed the text.'} ${m.ratings?.[me]?'Ranked Elo updated.':'No Elo changes in this mode.'}`;
     box.append(heading,details);
+    const board=document.createElement('div');board.className='match-scoreboard';
+    const table=document.createElement('table');table.className='match-score-table';
+    const head=document.createElement('thead');head.innerHTML='<tr><th>place / player</th><th>wpm</th><th>raw</th><th>accuracy</th><th>mistakes</th><th>time</th><th>elo</th></tr>';
+    const body=document.createElement('tbody');
+    [...m.players].sort((a,b)=>(a.elapsed??Infinity)-(b.elapsed??Infinity)||b.accuracy-a.accuracy).forEach((p,i)=>{
+      const tr=document.createElement('tr');
+      if(p.id===me)tr.className='score-you';
+      const rating=m.ratings?.[p.id],delta=rating?.delta;
+      const fields=[`#${i+1}  ${p.name}${p.id===me?' (You)':''}`,String(p.wpm??0),String(p.rawWpm??0),`${p.accuracy??100}%`,String(p.errors??0),p.elapsed==null?'DNF':`${p.elapsed}s`,delta===undefined?'—':`${delta>=0?'+':''}${delta}`];
+      fields.forEach((value,j)=>{const cell=document.createElement(j===0?'th':'td');cell.textContent=value;tr.append(cell);});
+      body.append(tr);
+    });table.append(head,body);board.append(table);box.append(board);
     if(m.ratings?.[me]) {
       user=m.ratings[me];updateProfile();
       const delta=document.createElement('strong');delta.className='elo-change';
@@ -364,7 +400,7 @@
       } else status(m.message,true);
     }
     if(m.type==='lobby')drawLobby(m.rooms,m.queue);
-    if(m.type==='queued') {queued=true;$('queueIndicator').classList.remove('hidden');status('Finding an opponent with similar Elo…');}
+    if(m.type==='queued') {queued=true;$('queueIndicator').classList.remove('hidden');$('queueTitle').textContent=queueMode==='ranked'?'⟳ searching ranked…':'⟳ searching unranked…';status(queueMode==='ranked'?'Finding an opponent with similar Elo…':'Finding an unranked opponent…');}
     if(m.type==='queueCancelled') {queued=false;$('queueIndicator').classList.add('hidden');status('Match search cancelled.');}
     if(m.type==='matchFound') {queued=false;$('queueIndicator').classList.add('hidden');status('Match found! Starting automatically…');}
     if(m.type==='room') {
@@ -376,7 +412,7 @@
       const url=new URL(location.href);url.searchParams.set('room',m.code);
       $('roomInviteUrl').value=url.href;
       $('roomInviteRow').classList.toggle('hidden',m.status!=='waiting');
-      $('roomType').textContent=m.ranked?'ranked 1v1':m.visibility==='public'?'open room':'private room';
+      $('roomType').textContent=m.ranked?'ranked 1v1':m.matchmaking?'unranked 1v1':m.visibility==='public'?'open room':'private room';
       $('roomPlayers').textContent=m.players.map(p=>`${p.name} (${p.elo} Elo)`).join('  vs  ');
       $('racePlayers').replaceChildren();m.players.forEach(createPlayerRow);
       setOpponentName();
@@ -395,15 +431,33 @@
     if(m.type==='progress') {
       positions[m.id]=m.position;players[m.id]={...(players[m.id]||{}),...m};
       updatePlayerRow(players[m.id]);
-      if(m.id!==me) showOtherText(m.position);
+      if(m.id===me) { $('raceLiveWpm').textContent=String(m.wpm??0);$('raceLiveAccuracy').textContent=`${m.accuracy??100}%`; }
+      else showOtherText(m.position);
+    }
+    if(m.type==='playerFinished'){
+      if(m.id===me){finishedMine=true;$('raceInput').disabled=true;$('raceInput').blur();
+        $('raceFinishNotice').textContent='You finished! Waiting for your opponent to complete the text…';
+        $('raceFinishNotice').classList.remove('hidden');
+      } else {status(`${m.name} finished. Keep typing to the end!`);}
     }
     if(m.type==='finished')showFinished(m);
     if(m.type==='leftRoom') {if(room)showLobby();}
   }
-  $('createRoom').onclick=()=>send({type:'create',visibility:$('roomVisibility').value,duration:Number($('onlineDuration').value)});
+  // Visual room choices keep the underlying selects in sync for accessibility and tests.
+  for(const [group,selector,attr] of [[$('roomVisibilityChoices'),$('roomVisibility'),'visibility'],[$('roomLengthChoices'),$('onlineDuration'),'words']]){
+    group.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>{
+      selector.value=button.dataset[attr];
+      group.querySelectorAll('button').forEach(choice=>{
+        const selected=choice===button;choice.classList.toggle('selected',selected);
+        choice.setAttribute('aria-pressed',String(selected));
+      });
+    }));
+  }
+  $('createRoom').onclick=()=>send({type:'create',visibility:$('roomVisibility').value,wordCount:Number($('onlineDuration').value)});
   $('joinRoom').onclick=()=>{const code=$('joinCode').value.trim().toUpperCase();if(code)send({type:'join',code});else status('Enter your room code first.',true);};
   $('joinCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('joinRoom').click();});
-  $('rankedQueue').onclick=()=>{if(queued)return;send({type:'queue'});};
+  $('rankedQueue').onclick=()=>{if(queued)return;queueMode='ranked';send({type:'queue',mode:'ranked'});};
+  $('unrankedQueue').onclick=()=>{if(queued)return;queueMode='unranked';send({type:'queue',mode:'unranked'});};
   $('cancelQueue').onclick=()=>send({type:'cancelQueue'});
   $('leaveRoom').onclick=()=>{send({type:'leave'});showLobby();};
   $('copyInvite').onclick=async()=>{

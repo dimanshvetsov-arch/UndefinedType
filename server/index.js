@@ -16,13 +16,13 @@ const queue = [];
 let database;
 
 const wordBank = 'the quick brown fox jumps over the lazy dog typing practice keyboard speed accuracy focus modern design challenge world always never another little after before under above between around smooth rhythm learn create better simple words text people time every day can make this work well and grow fast with care'.split(' ');
-const makeText = () => Array.from({length: 110}, () => wordBank[crypto.randomInt(wordBank.length)]).join(' ');
+const makeText = (words=80) => Array.from({length: words}, () => wordBank[crypto.randomInt(wordBank.length)]).join(' ');
 const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
 const respond = (res, code, data) => {res.writeHead(code, {'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options':'nosniff'}); res.end(JSON.stringify(data));};
 const publicUser = u => ({username:u.username, elo:u.elo || 1000, wins:u.wins || 0, losses:u.losses || 0, draws:u.draws || 0});
 const usernameKey = str => String(str || '').trim().toLowerCase();
 const passwordHash = (password, salt) => crypto.scryptSync(password, salt, 64).toString('hex');
-const newPlayer = ws => ({ws, id:ws.id, user:ws.user, typed:'', position:0, correct:0, errors:0, strokes:0,missStrokes:0,progress:0, wpm:0, accuracy:100});
+const newPlayer = ws => ({ws, id:ws.id, user:ws.user, typed:'', position:0, correct:0, errors:0, strokes:0,missStrokes:0,progress:0, wpm:0, accuracy:100,finishedAt:0});
 const uniqueCode = () => {let id; do {id=crypto.randomBytes(4).toString('hex').toUpperCase();} while(rooms.has(id)); return id;};
 
 // Signed tokens survive app restarts when SESSION_SECRET is stable. Do not send the secret to browsers.
@@ -86,13 +86,13 @@ async function saveUsers(changed) {
   }
 }
 
-function view(r){return {type:'room',code:r.code,visibility:r.visibility,ranked:r.ranked,status:r.status,duration:r.duration,
+function view(r){return {type:'room',code:r.code,visibility:r.visibility,ranked:r.ranked,status:r.status,duration:r.duration,wordCount:r.wordCount,
   players:r.players.map(p=>({id:p.id,name:p.user.username,elo:p.user.elo||1000,progress:p.progress,position:p.position,correct:p.correct,wpm:p.wpm,accuracy:p.accuracy})),
-  startAt:r.startAt||0, serverTime:Date.now()};}
+  matchmaking:r.matchmaking||false,startAt:r.startAt||0, serverTime:Date.now()};}
 function broadcast(r,msg) {for(const p of r.players) send(p.ws,msg);}
 function lobby() {
   const open=[...rooms.values()].filter(r=>r.visibility==='public'&&r.status==='waiting'&&r.players.length===1)
-    .map(r=>({code:r.code,host:r.players[0].user.username,players:r.players.length,duration:r.duration}));
+    .map(r=>({code:r.code,host:r.players[0].user.username,players:r.players.length,duration:r.duration,wordCount:r.wordCount}));
   const message={type:'lobby',rooms:open,queue:queue.length};
   for(const ws of clients) send(ws,message);
 }
@@ -112,7 +112,7 @@ function leave(ws) {
     if(r.status==='countdown') {
       clearTimeout(r.timer);
       r.status='waiting';r.startAt=0;r.text='';
-      for(const p of r.players) Object.assign(p,{typed:'',position:0,correct:0,errors:0,strokes:0,missStrokes:0,progress:0,wpm:0,accuracy:100});
+      for(const p of r.players) Object.assign(p,{typed:'',position:0,correct:0,errors:0,strokes:0,missStrokes:0,progress:0,wpm:0,accuracy:100,finishedAt:0});
       broadcast(r,{type:'countdownCancelled',message:'Player left. Waiting for another opponent.'});
     }
   }
@@ -130,29 +130,38 @@ function join(ws,r) {
   if(r.players.length===2) startCountdown(r);
   lobby();
 }
-function createRoom(ws,visibility,ranked,duration) {
+function createRoom(ws,visibility,ranked,wordCount=80) {
   leave(ws);
-  const r={code:uniqueCode(),visibility,ranked,duration:[15,30,60,120].includes(duration)?duration:30,status:'waiting',players:[],startAt:0,text:'',timer:null,endTimer:null};
+  const r={code:uniqueCode(),visibility,ranked,duration:0,wordCount:[30,60,100,150].includes(wordCount)?wordCount:80,status:'waiting',players:[],startAt:0,text:'',timer:null,endTimer:null};
   rooms.set(r.code,r);join(ws,r);
   return r;
 }
 function startCountdown(r) {
   if(r.status!=='waiting'||r.players.length!==2) return;
-  r.status='countdown';r.text=makeText();r.startAt=Date.now()+5000;
+  r.status='countdown';r.text=makeText(r.wordCount);r.startAt=Date.now()+5000;
   broadcast(r,view(r));
   broadcast(r,{type:'countdown',text:r.text,startAt:r.startAt,serverTime:Date.now(),duration:r.duration});
   r.timer=setTimeout(()=>{
     if(r.status!=='countdown'||r.players.length!==2) return;
     r.status='running';broadcast(r,{type:'start',startAt:r.startAt,serverTime:Date.now()});
-    r.endTimer=setTimeout(()=>endMatch(r,'time'),r.duration*1000);
+    // No race deadline: both players must finish the passage.
   },5000);
 }
 async function endMatch(r,reason='time',forcedWinnerId=null) {
   if(r.status!=='running') return;
   r.status='finished';clearTimeout(r.endTimer);clearTimeout(r.timer);
-  const scores=r.players.map(p=>({id:p.id,name:p.user.username,wpm:p.wpm,accuracy:p.accuracy,progress:p.progress,position:p.position,correct:p.correct}));
-  const ordered=[...scores].sort((a,b)=>b.correct-a.correct||b.accuracy-a.accuracy||b.wpm-a.wpm);
-  const isDraw=!forcedWinnerId&&(ordered.length!==2||(ordered[0].correct===ordered[1].correct&&ordered[0].accuracy===ordered[1].accuracy));
+  const scores=r.players.map(p=>{
+    const elapsed=p.finishedAt?(p.finishedAt-r.startAt)/1000:null;
+    const seconds=elapsed||Math.max(.01,(Date.now()-r.startAt)/1000);
+    return {id:p.id,name:p.user.username,
+      wpm:Math.round((p.correct/5)/(seconds/60)),
+      rawWpm:Math.round((p.strokes/5)/(seconds/60)),
+      accuracy:p.accuracy, progress:p.progress,position:p.position,correct:p.correct,
+      elapsed:elapsed===null?null:Math.round(elapsed*10)/10,
+      errors:p.missStrokes, currentErrors:p.errors,strokes:p.strokes,finished:!!p.finishedAt};
+  });
+  const ordered=[...scores].sort((a,b)=>(a.elapsed??Infinity)-(b.elapsed??Infinity)||b.accuracy-a.accuracy);
+  const isDraw=!forcedWinnerId&&(ordered.length!==2||(ordered[0].elapsed===ordered[1].elapsed&&ordered[0].accuracy===ordered[1].accuracy));
   const winnerId=forcedWinnerId||(isDraw?null:ordered[0].id);
   const changes={};
   if(r.ranked&&r.players.length===2) {
@@ -177,11 +186,11 @@ function checkQueue() {
   for(let i=0;i<queue.length;i++) {
     const a=queue[i],aWait=(Date.now()-a.queuedAt)/1000;
     const rangeA=Math.min(2000,150+Math.floor(aWait/5)*75);
-    const j=queue.findIndex((b,k)=>k>i&&b.user&&usernameKey(b.user.username)!==usernameKey(a.user.username)
-      &&Math.abs((a.user.elo||1000)-(b.user.elo||1000)) <= Math.max(rangeA,Math.min(2000,150+Math.floor((Date.now()-b.queuedAt)/5000)*75)));
+    const j=queue.findIndex((b,k)=>k>i&&b.user&&b.queueMode===a.queueMode&&usernameKey(b.user.username)!==usernameKey(a.user.username)
+      &&(a.queueMode==='unranked'||Math.abs((a.user.elo||1000)-(b.user.elo||1000)) <= Math.max(rangeA,Math.min(2000,150+Math.floor((Date.now()-b.queuedAt)/5000)*75))));
     if(j<0)continue;
     const b=queue[j];removeQueue(a);removeQueue(b);
-    const r=createRoom(a,'private',true,30);join(b,r);
+    const r=createRoom(a,'private',a.queueMode!=='unranked',80);r.matchmaking=true;join(b,r);
     send(a,{type:'matchFound'});send(b,{type:'matchFound'});
     lobby();return;
   }
@@ -189,7 +198,7 @@ function checkQueue() {
 function acceptInput(ws, raw) {
   const r=rooms.get(ws.room);
   const p=r?.players.find(player=>player.ws===ws);
-  if(!p||r.status!=='running') return;
+  if(!p||r.status!=='running'||p.finishedAt) return;
   if(typeof raw!=='string'||raw.length>r.text.length||raw.includes('\n')||raw.includes('\r')) return;
   const elapsedSeconds=Math.max(.01,(Date.now()-r.startAt)/1000);
   // Drop impossible jumps and extremely fast input. Backspacing and fixing errors remain allowed.
@@ -204,9 +213,13 @@ function acceptInput(ws, raw) {
   p.correct=correct;p.errors=raw.length-correct;
   p.progress=Math.round(100*correct/r.text.length);
   p.wpm=Math.round(correct/5/(elapsedSeconds/60));
-  p.accuracy=p.strokes?Math.round((p.strokes-p.missStrokes)/p.strokes*100):100;
+  p.accuracy=p.strokes?Math.round((p.strokes-p.missStrokes)/p.strokes*1000)/10:100;
   broadcast(r,{type:'progress',id:p.id,progress:p.progress,position:p.position,correct:p.correct,wpm:p.wpm,accuracy:p.accuracy});
-  if(correct===r.text.length) endMatch(r,'completed');
+  if(raw.length===r.text.length && correct===r.text.length) {
+    p.finishedAt=Date.now();
+    broadcast(r,{type:'playerFinished',id:p.id,name:p.user.username});
+    if(r.players.every(player=>player.finishedAt)) endMatch(r,'completed');
+  }
 }
 const allowedFiles=new Map([['/','index.html'],['/index.html','index.html'],['/style.css','style.css'],['/app.js','app.js'],['/multiplayer.js','multiplayer.js'],['/logo.png','logo.png']]);
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png'};
@@ -267,11 +280,11 @@ wss.on('connection',(ws,req)=>{
     if(m.type==='lobby') {lobby();return;}
     if(!ws.user)return send(ws,{type:'error',message:'Log in to play multiplayer.'});
     if(m.type==='leave') {leave(ws);send(ws,{type:'leftRoom'});return;}
-    if(m.type==='create') {createRoom(ws,m.visibility==='public'?'public':'private',false,Number(m.duration));return;}
+    if(m.type==='create') {createRoom(ws,m.visibility==='public'?'public':'private',false,Number(m.wordCount));return;}
     if(m.type==='join') {const r=rooms.get(String(m.code||'').toUpperCase());return r?join(ws,r):send(ws,{type:'error',message:'Room not found.'});}
     if(m.type==='queue') {
       if(ws.room){leave(ws);}
-      if(!queue.includes(ws)){ws.queuedAt=Date.now();queue.push(ws);send(ws,{type:'queued'});}
+      if(!queue.includes(ws)){ws.queuedAt=Date.now();ws.queueMode=m.mode==='unranked'?'unranked':'ranked';queue.push(ws);send(ws,{type:'queued',mode:ws.queueMode});}
       checkQueue();lobby();return;
     }
     if(m.type==='cancelQueue'){removeQueue(ws);send(ws,{type:'queueCancelled'});lobby();return;}
@@ -283,7 +296,7 @@ wss.on('connection',(ws,req)=>{
 const queueTimer=setInterval(checkQueue,1000);
 queueTimer.unref?.();
 async function start() {
-  try{await initializeStorage();server.listen(PORT,'0.0.0.0',()=>console.log(`UndefinedType v1.2 online at port ${PORT}`));}
+  try{await initializeStorage();server.listen(PORT,'0.0.0.0',()=>console.log(`UndefinedType v1.8 online at port ${PORT}`));}
   catch(e){console.error('Cannot start: storage initialization failed.',e);process.exitCode=1;}
 }
 if(require.main===module) start();
