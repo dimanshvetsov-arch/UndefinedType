@@ -1,26 +1,439 @@
 'use strict';
-(()=>{
- const el=id=>document.getElementById(id);
- let socket,me,room=null,matchText='',startAt=0,duration=30,finished=false,typing='',tick=null;
- const status=t=>el('onlineStatus').textContent=t;
- const send=obj=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(obj));};
- const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function connect(){const protocol=location.protocol==='https:'?'wss':'ws';socket=new WebSocket(`${protocol}://${location.host}/ws`);socket.onopen=()=>status('Connected · create or join a room');socket.onclose=()=>{status('Offline · multiplayer requires the hosted Node.js server. Reconnecting…');clearInterval(tick);setTimeout(connect,3000);};socket.onerror=()=>status('Connection error · run npm start or open the deployed website');socket.onmessage=event=>{let m;try{m=JSON.parse(event.data);}catch{return;}if(m.type==='hello')me=m.id;
- if(m.type==='error')status(m.message);
- if(m.type==='room'){room=m;el('onlineRoom').classList.remove('hidden');el('roomCode').textContent=m.code;el('roomPlayers').textContent=m.players.map(p=>`${p.name} ${p.ready?'✓ ready':'· waiting'}`).join('  |  ');el('readyMatch').classList.toggle('hidden',!m.players.some(p=>p.id===me)||m.status!=='waiting');el('racePlayers').replaceChildren();m.players.forEach(p=>renderPlayer(p));status(`Room ${m.code} · ${m.status}`);}
- if(m.type==='countdown'){matchText=m.text;startAt=m.startAt;duration=m.duration;finished=false;typing='';el('raceInput').value='';el('raceInput').classList.add('hidden');el('raceResult').textContent='';el('raceText').textContent=m.text;clearInterval(tick);tick=setInterval(()=>{const remaining=Math.ceil((startAt-Date.now())/1000);if(remaining>0)el('raceCountdown').textContent=`Starting in ${remaining}…`;else{el('raceCountdown').textContent=`${Math.max(0,Math.ceil((startAt+duration*1000-Date.now())/1000))}s`;if(!finished&&room?.players.some(p=>p.id===me)){el('raceInput').classList.remove('hidden');if(document.activeElement!==el('raceInput'))el('raceInput').focus();}}},100);}
- if(m.type==='start')status('Race started!');
- if(m.type==='progress'){const row=el(`race-${m.id}`);if(row){row.querySelector('progress').value=m.progress;row.querySelector('small').textContent=`${m.progress}% · ${m.wpm} WPM`;}}
- if(m.type==='finished'){finished=true;clearInterval(tick);el('raceInput').disabled=true;el('raceCountdown').textContent='Match finished';const winner=m.players.find(p=>p.id===m.winnerId);el('raceResult').textContent=winner?`${winner.name} wins! · ${winner.wpm} WPM`:'Draw!';status(m.reason==='disconnect'?'Match ended: opponent disconnected':'Match complete');}
- };}
- function renderPlayer(p){const row=document.createElement('div');row.className='race-player';row.id=`race-${p.id}`;const name=document.createElement('span');name.textContent=p.name+(p.id===me?' (you)':'');const bar=document.createElement('progress');bar.max=100;bar.value=p.progress;const stat=document.createElement('small');stat.textContent=`${p.progress}% · ${p.wpm} WPM`;row.append(name,bar,stat);el('racePlayers').append(row);}
- el('createRoom').onclick=()=>{el('raceInput').disabled=false;send({type:'create',name:el('onlineName').value,duration:Number(el('onlineDuration').value)});};
- const join=spectate=>{el('raceInput').disabled=false;send({type:'join',code:el('joinCode').value.trim(),name:el('onlineName').value,spectate});};
- el('joinRoom').onclick=()=>join(false);el('spectateRoom').onclick=()=>join(true);
- el('readyMatch').onclick=()=>send({type:'ready'});
- el('leaveRoom').onclick=()=>{send({type:'leave'});room=null;clearInterval(tick);el('onlineRoom').classList.add('hidden');status('Left room');};
- el('copyInvite').onclick=async()=>{const url=new URL(location.href);url.searchParams.set('room',room?.code||'');try{await navigator.clipboard.writeText(url.href);status('Invite link copied');}catch{status('Room code: '+(room?.code||''));}};
- el('raceInput').addEventListener('input',()=>{if(finished||Date.now()<startAt)return;const val=el('raceInput').value;if(!matchText.startsWith(val)){el('raceInput').value=typing;return;}typing=val;send({type:'input',value:typing});});
- const invited=new URLSearchParams(location.search).get('room');if(invited)el('joinCode').value=invited.toUpperCase();
- if(location.protocol==='file:')status('Multiplayer requires the hosted version. Run npm install and npm start.');else connect();
+(() => {
+  const $ = id => document.getElementById(id);
+  const page = $('multiplayer');
+  let socket = null, reconnectTimer = null, connected = false;
+  let me = '', user = null, token = localStorage.getItem('ut_token') || '';
+  let room = null, phase = 'waiting', matchText = '', startAt = 0, duration = 30, clockOffset = 0;
+  let countdownTimer = null, queued = false, typingValue = '', positions = {}, players = {};
+  let sharedChars = [], ownPainted = '', otherPainted = 0;
+  let youPosition = 0, opponentPosition = 0;
+  let markerFrame = 0;
+  let lineForChar = [], lineTops = [], currentLine = 0;
+  // An invitation opens the room automatically after the visitor has authenticated.
+  const roomParameter = new URLSearchParams(location.search).get('room') || '';
+  let pendingInvite = /^[a-f0-9]{8}$/i.test(roomParameter) ? roomParameter.toUpperCase() : null;
+  let inviteAttempted = false;
+  if (pendingInvite) $('joinCode').value = pendingInvite;
+
+  function updateInviteNotice() {
+    const notice = $('inviteBanner');
+    notice.classList.toggle('hidden', !pendingInvite);
+    if (!pendingInvite) return;
+    $('inviteMessage').textContent = user
+      ? `Invitation to room ${pendingInvite} — connecting you automatically…`
+      : `You've been invited to room ${pendingInvite}. Log in or create an account to join automatically.`;
+    $('welcomeIntro').textContent = `You've been invited to a multiplayer race! Log in or create an account to join room ${pendingInvite}. Guests can only play solo.`;
+    $('authGateIntro').textContent = `You've been invited to room ${pendingInvite}. Log in or create an account and you'll join automatically.`;
+  }
+  function dismissInvite() {
+    pendingInvite = null;
+    inviteAttempted = false;
+    const current = new URL(location.href);
+    current.searchParams.delete('room');
+    history.replaceState(history.state, '', current.pathname + current.search + current.hash);
+    $('inviteBanner').classList.add('hidden');
+    $('welcomeIntro').textContent = 'Practice typing as a guest, or create an account to compete online.';
+    $('authGateIntro').textContent = 'Guests can practice solo. Create a free account or log in to race.';
+  }
+  function tryJoinInvite() {
+    if (!pendingInvite || inviteAttempted || !connected || !user || room) return;
+    inviteAttempted = true;
+    if (send({type:'join',code:pendingInvite})) status(`Joining invited room ${pendingInvite}…`);
+    else inviteAttempted = false;
+  }
+  $('dismissInvite').onclick = () => {dismissInvite(); status('Invite dismissed. Choose a multiplayer mode.');};
+
+  function status(message, isError = false) {
+    $('onlineStatus').textContent = message;
+    $('onlineStatus').classList.toggle('online-error', isError);
+  }
+  function send(data) {
+    if (socket?.readyState !== WebSocket.OPEN) {
+      status('Disconnected. Reconnecting to the multiplayer server…', true);
+      return false;
+    }
+    socket.send(JSON.stringify(data));
+    return true;
+  }
+  function updateProfile() {
+    document.querySelector('.profile').textContent = user ? `${user.username} · ${user.elo} Elo` : 'guest';
+    $('authGate').classList.toggle('hidden', Boolean(user));
+    $('multiplayerContent').classList.toggle('hidden', !user);
+    $('accountState').textContent = user ? `signed in as ${user.username} · ${user.elo} Elo` : '';
+    $('welcomeGate').classList.toggle('hidden', !!user || sessionStorage.getItem('ut_guest_chosen') === '1');
+    updateInviteNotice();
+  }
+  function showLobby() {
+    room = null; phase='waiting';
+    $('onlineRoom').classList.add('hidden');
+    $('lobbySection').classList.remove('hidden');
+    $('raceResult').replaceChildren();
+    $('raceInput').blur();
+    $('raceInput').value='';
+    clearSharedText();
+    clearInterval(countdownTimer);
+    if (!queued) status(connected ? 'Connected · choose how to play' : 'Connecting to multiplayer…');
+  }
+  async function restoreAccount() {
+    if (!token) {updateProfile();return;}
+    try {
+      const response = await fetch('/api/me', {headers:{Authorization:'Bearer '+token}});
+      const data = await response.json();
+      if (data.user) {user=data.user;sessionStorage.removeItem('ut_guest_chosen');}
+      else {token='';localStorage.removeItem('ut_token');}
+    } catch { /* offline state handled by the connection banner */ }
+    updateProfile();
+  }
+  async function authenticate(action, welcome=false) {
+    const nameField=$(welcome?'welcomeUsername':'authUsername');
+    const passField=$(welcome?'welcomePassword':'authPassword');
+    const error=$(welcome?'welcomeError':'authError');
+    error.textContent='';
+    const username=nameField.value.trim(), password=passField.value;
+    if (!username || !password) {error.textContent='Enter your username and password.';return;}
+    try {
+      const response=await fetch('/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,username,password})});
+      const data=await response.json();
+      if(!response.ok)throw Error(data.error || 'Login failed');
+      token=data.token;user=data.user;localStorage.setItem('ut_token',token);
+      sessionStorage.removeItem('ut_guest_chosen');
+      passField.value='';
+      updateProfile();
+      if (connected) send({type:'auth',token});
+      else connect();
+      status(`Welcome, ${user.username}! Pick a multiplayer mode.`);
+    } catch(e) {error.textContent=e.message;}
+  }
+  $('welcomeRegister').onclick=()=>authenticate('register',true);
+  $('welcomeLogin').onclick=()=>authenticate('login',true);
+  $('welcomeGuest').onclick=()=>{sessionStorage.setItem('ut_guest_chosen','1');$('welcomeGate').classList.add('hidden');};
+  $('registerAccount').onclick=()=>authenticate('register');
+  $('loginAccount').onclick=()=>authenticate('login');
+  $('guestChoice').onclick=()=>document.querySelector('[data-page="test"]').click();
+  $('logoutAccount').onclick=()=>{
+    send({type:'unauth'});
+    token='';user=null;queued=false;
+    localStorage.removeItem('ut_token');sessionStorage.setItem('ut_guest_chosen','1');
+    updateProfile();showLobby();status('Logged out · solo typing remains available');
+  };
+  document.querySelectorAll('.online-controls input[type="password"]').forEach(input => {
+    input.addEventListener('keydown',e=>{if(e.key==='Enter'){
+      if(input.id==='welcomePassword')$('welcomeLogin').click();else $('loginAccount').click();
+    }});
+  });
+
+  function connect() {
+    if(location.protocol==='file:') {status('Multiplayer works on your hosted website, not through a local file.',true);return;}
+    if(socket && (socket.readyState===WebSocket.OPEN||socket.readyState===WebSocket.CONNECTING))return;
+    const scheme=location.protocol==='https:'?'wss:':'ws:';
+    socket=new WebSocket(`${scheme}//${location.host}/ws`);
+    socket.onopen=()=>{
+      connected=true;inviteAttempted=false;status('Connected · choose how to play');
+      if(token)send({type:'auth',token});send({type:'lobby'});
+      if(room){showLobby();status('Connection restored. Your previous room was left.',true);}
+    };
+    socket.onmessage=event=>{
+      let m;try{m=JSON.parse(event.data);}catch{return;}
+      onMessage(m);
+    };
+    socket.onclose=()=>{
+      connected=false;queued=false;inviteAttempted=false;
+      clearInterval(countdownTimer);
+      $('raceInput').disabled=true;
+      status('Connection lost · reconnecting automatically…',true);
+      clearTimeout(reconnectTimer);
+      reconnectTimer=setTimeout(connect,3000);
+    };
+    socket.onerror=()=>status('Unable to reach the multiplayer server.',true);
+  }
+
+  function drawLobby(rooms, waiting) {
+    $('queueCount').textContent = waiting===1 ? '1 player searching now' : `${waiting} players searching now`;
+    const list=$('publicRooms');list.replaceChildren();
+    if(!rooms.length) {const e=document.createElement('p');e.className='empty-room';e.textContent='No open rooms yet. Create one below!';list.append(e);return;}
+    for(const r of rooms) {
+      const button=document.createElement('button');button.className='room-list-entry';
+      const name=document.createElement('strong');name.textContent=r.host;
+      const details=document.createElement('span');details.textContent=`${r.duration}s · ${r.players}/2 players · ${r.code}`;
+      button.append(name,details);
+      button.onclick=()=>send({type:'join',code:r.code});list.append(button);
+    }
+  }
+  function createPlayerRow(p) {
+    const item=document.createElement('div');item.className='race-player';item.id=`race-${p.id}`;
+    const name=document.createElement('strong');name.className='race-player-name';name.textContent=p.name+(p.id===me?' · you':'');
+    const track=document.createElement('div');track.className='race-progress-track';
+    const fill=document.createElement('div');fill.className='race-progress-fill';track.append(fill);
+    const numbers=document.createElement('small');numbers.textContent='0 WPM · 100%';
+    item.append(name,track,numbers);
+    $('racePlayers').append(item);
+    updatePlayerRow(p);
+  }
+  function updatePlayerRow(p) {
+    const item=document.getElementById(`race-${p.id}`);
+    if(!item)return;
+    item.querySelector('.race-progress-fill').style.width=`${Math.max(0,Math.min(100,p.progress||0))}%`;
+    item.querySelector('small').textContent=`${p.wpm||0} WPM · ${p.accuracy??100}%`;
+  }
+  // Both players use one unhighlighted passage. Only the two thin carets show their positions.
+  function createSharedText() {
+    const el=$('raceSharedText');
+    el.querySelectorAll('.race-word,.race-end').forEach(node=>node.remove());
+    const chars=[],fragment=document.createDocumentFragment();
+    for(const chunk of (matchText.match(/\S+\s*|\s+/g)||[])) {
+      const word=document.createElement('span');word.className='race-word';
+      for(const letter of chunk) {
+        const span=document.createElement('span');span.className='race-char';span.textContent=letter;
+        word.append(span);chars.push(span);
+      }
+      fragment.append(word);
+    }
+    const end=document.createElement('span');end.className='race-char race-end';end.textContent='\u200b';
+    chars.push(end);fragment.append(end);el.prepend(fragment);
+    return chars;
+  }
+  function clearSharedText() {
+    $('raceSharedText').querySelectorAll('.race-word,.race-end').forEach(node=>node.remove());
+    for(const id of ['raceYouMarker','raceOpponentMarker'])$(id).classList.add('hidden');
+    $('raceSharedViewport').scrollTop=0;
+    sharedChars=[];ownPainted='';otherPainted=0;youPosition=0;opponentPosition=0;
+    lineForChar=[];lineTops=[];currentLine=0;
+  }
+  // Measure the actual wrapped lines. This is responsive: resizing the window
+  // can change word wrapping, so we recalculate rather than hardcoding a length.
+  function measureLines() {
+    lineForChar=[];lineTops=[];
+    if(!sharedChars.length)return;
+    const contentRect=$('raceSharedText').getBoundingClientRect();
+    let lastY=null,line=-1;
+    sharedChars.forEach((node,i)=>{
+      const y=node.getBoundingClientRect().top-contentRect.top;
+      if(lastY===null||Math.abs(y-lastY)>3){line++;lineTops.push(y);lastY=y;}
+      lineForChar[i]=line;
+    });
+  }
+  // Scroll by a complete visual row, not by individual pixels as the player types.
+  // Two lines are shown: your current row at the top, the next row below it.
+  function paintMarkers() {
+    markerFrame=0;
+    if(!sharedChars.length)return;
+    const content=$('raceSharedText'),viewport=$('raceSharedViewport');
+    const contentRect=content.getBoundingClientRect();
+    if(lineForChar.length!==sharedChars.length) measureLines();
+    const ownIndex=Math.min(youPosition,sharedChars.length-1);
+    const opponentIndex=Math.min(opponentPosition,sharedChars.length-1);
+    const activeLine=lineForChar[ownIndex]||0;
+    // Keep the current line at the very top every time the line changes.
+    if(currentLine!==activeLine||Math.abs(viewport.scrollTop-(lineTops[activeLine]-lineTops[0]))>2){
+      currentLine=activeLine;
+      viewport.scrollTop=Math.max(0,lineTops[activeLine]-lineTops[0]);
+    }
+    // A rival on the next row is visible below. Two or more rows ahead or
+    // behind is deliberately offscreen (and cannot overlap unrelated text).
+    for(const [index,id,isOpponent] of [[ownIndex,'raceYouMarker',false],[opponentIndex,'raceOpponentMarker',true]]) {
+      const marker=$(id),node=sharedChars[index],line=lineForChar[index]||0;
+      const withinView=!isOpponent||(line>=activeLine&&line<=activeLine+1);
+      if(!node||!withinView){marker.classList.add('hidden');continue;}
+      const rect=node.getBoundingClientRect();
+      marker.style.left=`${rect.left-contentRect.left}px`;
+      marker.style.top=`${rect.top-contentRect.top}px`;
+      marker.classList.remove('hidden');
+    }
+    content.classList.toggle('race-tied',youPosition===opponentPosition);
+  }
+  function scheduleMarkers(remeasure=false) {
+    if(remeasure){lineForChar=[];lineTops=[];}
+    if(!markerFrame)markerFrame=requestAnimationFrame(paintMarkers);
+  }
+  function showOwnText(value) {
+    if(!sharedChars.length)return;
+    // The passage itself never changes color as a player types. Keep one
+    // consistent text color; the thin yellow caret marks your position.
+    youPosition=value.length;ownPainted=value;typingValue=value;
+    scheduleMarkers();
+  }
+  function showOtherText(position) {
+    if(!sharedChars.length)return;
+    opponentPosition=Math.max(0,Math.min(Number(position)||0,matchText.length));
+    otherPainted=opponentPosition;
+    // Do not paint/highlight the opponent's typed characters.
+    scheduleMarkers();
+  }
+  function setOpponentName() {
+    // The moving caret shows only the name, not a separate color legend.
+    const other=Object.values(players).find(p=>p.id!==me);
+    $('raceOpponentTag').textContent=other?.name||'opponent';
+  }
+  window.addEventListener('resize',()=>scheduleMarkers(true));
+  function prepareRace(m) {
+    matchText=m.text;startAt=m.startAt;duration=m.duration;
+    clockOffset=Date.now()-(m.serverTime||Date.now());
+    phase='countdown';typingValue='';otherPainted=0;ownPainted='';youPosition=0;opponentPosition=0;
+    positions={};
+    $('raceResult').replaceChildren();
+    $('raceInput').disabled=true;$('raceInput').value='';$('raceInput').maxLength=matchText.length;
+    $('raceSharedViewport').scrollTop=0;
+    sharedChars=createSharedText();
+    measureLines();currentLine=0;
+    setOpponentName();
+    showOwnText('');showOtherText(0);
+    $('raceCountdown').classList.add('countdown-active');
+    clearInterval(countdownTimer);
+    countdownTimer=setInterval(tick,70);tick();
+  }
+  function tick() {
+    const now=Date.now()-clockOffset;
+    if(phase==='countdown') {
+      const remaining=Math.max(1,Math.ceil((startAt-now)/1000));
+      $('raceCountdown').textContent=`starting in ${remaining}`;
+    } else if(phase==='running') {
+      const remaining=Math.max(0,Math.ceil((startAt+duration*1000-now)/1000));
+      $('raceCountdown').textContent=`${remaining}s left`;
+    }
+  }
+  function startRace() {
+    if(phase==='finished')return;
+    phase='running';
+    $('raceCountdown').classList.remove('countdown-active');
+    $('raceInput').disabled=false;
+    status('Race started · follow your yellow cursor!');
+    focusRace();tick();
+  }
+  function focusRace() {if(!room||phase!=='running'||!page.classList.contains('active'))return;$('raceInput').focus({preventScroll:true});}
+  $('raceSharedViewport').addEventListener('click',focusRace);
+  document.querySelector('[data-page="multiplayer"]').addEventListener('click',()=>setTimeout(focusRace,0));
+  $('raceInput').addEventListener('paste',e=>{e.preventDefault();status('Pasting is disabled during races.');});
+  $('raceInput').addEventListener('drop',e=>e.preventDefault());
+  // Enter works like Space only when the passage expects a space,
+  // such as at the end of a wrapped visual line.
+  $('raceInput').addEventListener('keydown',e=>{
+    if(e.key!=='Enter')return;
+    e.preventDefault();
+    if(phase!=='running')return;
+    const next=matchText[typingValue.length];
+    if(next!==' '&&next!=='\n')return;
+    const value=typingValue+(next==='\n'?'\n':' ');
+    $('raceInput').value=value;
+    showOwnText(value);
+    send({type:'input',value});
+  });
+  $('raceInput').addEventListener('input',()=>{
+    if(phase!=='running') {$('raceInput').value=typingValue;return;}
+    const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
+    if(val!==$('raceInput').value)$('raceInput').value=val;
+    showOwnText(val);
+    send({type:'input',value:val});
+  });
+  function showFinished(m) {
+    phase='finished';clearInterval(countdownTimer);
+    $('raceInput').disabled=true;$('raceInput').blur();
+    $('raceCountdown').classList.remove('countdown-active');
+    $('raceCountdown').textContent='race complete';
+    const winner=m.players.find(p=>p.id===m.winnerId);
+    const mine=m.players.find(p=>p.id===me);
+    const box=$('raceResult');box.replaceChildren();
+    const heading=document.createElement('h2');heading.textContent=!winner?'Draw!':winner.id===me?'You won!':`${winner.name} won!`;
+    const details=document.createElement('p');
+    details.textContent=`${mine?.wpm||0} WPM · ${mine?.accuracy??100}% accuracy · ${mine?.correct||0} correct characters`;
+    box.append(heading,details);
+    if(m.ratings?.[me]) {
+      user=m.ratings[me];updateProfile();
+      const delta=document.createElement('strong');delta.className='elo-change';
+      delta.textContent=`${user.delta>=0?'+':''}${user.delta} Elo · now ${user.elo}`;
+      box.append(delta);
+    }
+    const returnButton=document.createElement('button');returnButton.className='primary';returnButton.textContent='back to multiplayer';
+    returnButton.onclick=()=>{send({type:'leave'});queued=false;showLobby();};
+    box.append(returnButton);
+    status(m.reason==='forfeit'?'A player left the match.': 'Match complete');
+    refreshLeaderboard();
+  }
+  function onMessage(m) {
+    if(m.type==='hello') {me=m.id;clockOffset=Date.now()-(m.serverTime||Date.now());}
+    if(m.type==='auth') {
+      if(!m.user) {
+        user=null;token='';localStorage.removeItem('ut_token');
+        updateProfile();showLobby();status('Please log in to play multiplayer.',true);
+      } else {user=m.user;updateProfile();tryJoinInvite();}
+    }
+    if(m.type==='error') {
+      if (pendingInvite && inviteAttempted) {
+        const code = pendingInvite; dismissInvite();
+        status(`Could not join room ${code}: ${m.message} Ask for a new invite link.`, true);
+      } else status(m.message,true);
+    }
+    if(m.type==='lobby')drawLobby(m.rooms,m.queue);
+    if(m.type==='queued') {queued=true;$('queueIndicator').classList.remove('hidden');status('Finding an opponent with similar Elo…');}
+    if(m.type==='queueCancelled') {queued=false;$('queueIndicator').classList.add('hidden');status('Match search cancelled.');}
+    if(m.type==='matchFound') {queued=false;$('queueIndicator').classList.add('hidden');status('Match found! Starting automatically…');}
+    if(m.type==='room') {
+      if (pendingInvite && m.code === pendingInvite) dismissInvite();
+      const isNew=!room||m.code!==room.code;
+      room=m;players=Object.fromEntries(m.players.map(p=>[p.id,p]));
+      $('lobbySection').classList.add('hidden');$('onlineRoom').classList.remove('hidden');
+      $('roomCode').textContent=m.code;
+      const url=new URL(location.href);url.searchParams.set('room',m.code);
+      $('roomInviteUrl').value=url.href;
+      $('roomInviteRow').classList.toggle('hidden',m.status!=='waiting');
+      $('roomType').textContent=m.ranked?'ranked 1v1':m.visibility==='public'?'open room':'private room';
+      $('roomPlayers').textContent=m.players.map(p=>`${p.name} (${p.elo} Elo)`).join('  vs  ');
+      $('racePlayers').replaceChildren();m.players.forEach(createPlayerRow);
+      setOpponentName();
+      if(isNew){matchText='';clearSharedText();typingValue='';$('raceResult').replaceChildren();}
+      if(m.status==='waiting') {
+        phase='waiting';$('raceCountdown').textContent='waiting for another player…';
+        $('raceInput').disabled=true;status('Room created · invite a friend or wait for someone to join.');
+      }
+    }
+    if(m.type==='countdown')prepareRace(m);
+    if(m.type==='countdownCancelled') {
+      phase='waiting';clearInterval(countdownTimer);$('raceCountdown').textContent=m.message;
+      $('raceInput').disabled=true;matchText='';clearSharedText();status(m.message);
+    }
+    if(m.type==='start') startRace();
+    if(m.type==='progress') {
+      positions[m.id]=m.position;players[m.id]={...(players[m.id]||{}),...m};
+      updatePlayerRow(players[m.id]);
+      if(m.id!==me) showOtherText(m.position);
+    }
+    if(m.type==='finished')showFinished(m);
+    if(m.type==='leftRoom') {if(room)showLobby();}
+  }
+  $('createRoom').onclick=()=>send({type:'create',visibility:$('roomVisibility').value,duration:Number($('onlineDuration').value)});
+  $('joinRoom').onclick=()=>{const code=$('joinCode').value.trim().toUpperCase();if(code)send({type:'join',code});else status('Enter your room code first.',true);};
+  $('joinCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('joinRoom').click();});
+  $('rankedQueue').onclick=()=>{if(queued)return;send({type:'queue'});};
+  $('cancelQueue').onclick=()=>send({type:'cancelQueue'});
+  $('leaveRoom').onclick=()=>{send({type:'leave'});showLobby();};
+  $('copyInvite').onclick=async()=>{
+    if(!room)return;
+    const input=$('roomInviteUrl');
+    try {
+      if(!navigator.clipboard?.writeText)throw Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(input.value);
+      status('Invite link copied! Send it to your friend.');
+    } catch {
+      input.focus();input.select();
+      try {
+        if(!document.execCommand?.('copy'))throw Error('Copy unavailable');
+        status('Invite link copied! Send it to your friend.');
+      } catch {status('Select the invite link and press Ctrl+C (or Command+C) to copy it.');}
+    }
+  };
+  async function refreshLeaderboard() {
+    try {
+      const response=await fetch('/api/leaderboard');const data=await response.json();
+      const el=$('globalRanks');el.replaceChildren();
+      if(!data.players?.length){el.textContent='No ranked players yet. Be the first!';return;}
+      data.players.forEach((p,i)=>{
+        const row=document.createElement('div');row.className='ranking-row';
+        row.textContent=`#${i+1}   ${p.username}   ·   ${p.elo} Elo   ·   ${p.wins} wins · ${p.losses} losses`;
+        el.append(row);
+      });
+    }catch{}
+  }
+  updateProfile();
+  if (pendingInvite) document.querySelector('[data-page="multiplayer"]').click();
+  restoreAccount();refreshLeaderboard();connect();
 })();
