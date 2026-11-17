@@ -1,0 +1,352 @@
+{
+ "en": {
+  "english": "English",
+  "native": "English",
+  "bank": "the of and to in is you that it he was for on are as with his they at be this have from or one had by word but not what all were we when your can said there use an each which she do how their if will up other about out many then them these so some her would make like him into time has look two more write go see number no way could people my than first water been call who oil its now find long down day did get come made may part quick brown fox jumps over lazy dog beautiful keyboard typing practice speed accuracy smooth focus learn create modern design competitive challenge world always never another little after before under above between around"
+ },
+ "de": {
+  "english": "German",
+  "native": "Deutsch",
+  "bank": "der die das und ist ein eine ich du wir sie er es nicht mit auf für von zu den dem des im am wie was auch noch aber oder wenn dann bei aus nach über unter sehr schon mehr hier dort heute morgen gestern zeit haus mensch kinder schreiben lesen schnell langsam wort wörter sprache tastatur übung lernen gut richtig falsch neue kleine große arbeit leben spielen fragen antworten"
+ },
+ "es": {
+  "english": "Spanish",
+  "native": "Español",
+  "bank": "el la los las de que y en un una es por con para como más pero sus le ya o fue este ha sí porque esta son entre cuando muy sin sobre también me hasta hay donde quien desde todo nos durante todos uno les ni contra otros ese eso ante ellos tiempo escribir rápido palabras teclado prueba velocidad mundo amigo"
+ },
+ "fr": {
+  "english": "French",
+  "native": "Français",
+  "bank": "le la les de des un une et en est que pour dans qui sur pas plus par avec ce il elle nous vous ils elles être avoir comme mais ou où donc quand sans sous entre après avant tout très bien temps mots écrire vite clavier langue test vitesse précision monde maison bonjour"
+ },
+ "ru": {
+  "english": "Russian",
+  "native": "Русский",
+  "bank": "и в не на я что он она это как с по из у за от к мы вы они но да нет для его её их был есть будут когда где почему потому если только очень много мало быстро медленно слово слова текст писать печатать клавиатура скорость точность время тест язык русский мир человек дом школа игра работа новый хороший"
+ },
+ "pt": {
+  "english": "Portuguese",
+  "native": "Português",
+  "bank": "de que e o a em um para é com não uma os no se na por mais as dos como mas foi ao ele das tem à seu sua ou ser quando muito há nos já está eu também só pelo pela até isso ela entre era depois sem mesmo aos ter seus quem nas me esse eles estão você tinha foram essa num nem suas meu às minha têm numa pelos elas havia seja qual será nós tenho lhe deles essas esses pelas este fosse dele tu te vocês vos lhes meus minhas teu tua teus tuas nosso nossa nossos nossas dela delas esta estes estas aquele aquela aqueles aquelas isto aquilo estou estamos estava estavam fui fomos sou somos"
+ },
+ "it": {
+  "english": "Italian",
+  "native": "Italiano",
+  "bank": "il lo la i gli le di a da in con su per tra fra che non un una uno è sono come più ma anche si no io tu lui lei noi voi loro questo quello casa tempo parola parole scrivere velocità tastiera prova mondo amico bello nuovo sempre mai dopo prima dove quando perché molto poco"
+ },
+ "nl": {
+  "english": "Dutch",
+  "native": "Nederlands",
+  "bank": "de het een en van ik je dat die in is niet op te zijn voor met als aan er maar om ook dan wat bij uit nog over naar heeft worden kunnen deze dit goed tijd woorden typen snelheid toetsenbord wereld mensen mooi"
+ },
+ "pl": {
+  "english": "Polish",
+  "native": "Polski",
+  "bank": "i w na z nie się to jest że do o a jak co ale po za od dla czy już tylko bardzo też ten ta tego być mieć czas słowa pisać szybko klawiatura świat człowiek dom szkoła dobry nowy"
+ },
+ "uk": {
+  "english": "Ukrainian",
+  "native": "Українська",
+  "bank": "і в на не що це як він вона ми ви вони з до за від для але так ні коли де чому тому якщо дуже багато мало швидко повільно слово слова текст писати друкувати клавіатура швидкість точність час тест мова українська світ людина дім школа гра робота новий хороший"
+ },
+ "tr": {
+  "english": "Turkish",
+  "native": "Türkçe",
+  "bank": "ve bir bu için ile de da ben sen o biz siz onlar çok ama daha gibi var yok ne nasıl neden zaman kelime yazmak hızlı klavye dünya insan ev okul oyun iş yeni güzel doğru yanlış"
+ },
+ "ar": {
+  "english": "Arabic",
+  "native": "العربية",
+  "bank": "من في على إلى عن هذا هذه ذلك التي الذي كان يكون أنا أنت نحن هم مع عند بعد قبل اليوم غدا أمس وقت عمل مدرسة بيت كتاب لغة كلمة كلمات كتابة سرعة دقة اختبار العالم الناس جديد جميل صغير كبير كثير قليل"
+ },
+ "hi": {
+  "english": "Hindi",
+  "native": "हिन्दी",
+  "bank": "और यह वह मैं तुम हम आप लोग घर समय काम स्कूल किताब भाषा शब्द लिखना गति सही गलत नया पुराना अच्छा बड़ा छोटा दुनिया पानी दिन रात आज कल दोस्त खेल सीखना"
+ },
+ "zh": {
+  "english": "Chinese",
+  "native": "中文",
+  "bank": "你好 世界 文字 输入 练习 速度 准确 时间 今天 明天 昨天 学校 朋友 工作 词语 文章 中文 简单 新的 大的 小的 快速 慢速 美丽"
+ },
+ "ja": {
+  "english": "Japanese",
+  "native": "日本語",
+  "bank": "こんにちは 世界 文字 入力 練習 速度 正確 時間 今日 明日 昨日 学校 友達 仕事 言葉 文章 日本語 簡単 新しい 大きい 小さい 早い 遅い 美しい"
+ },
+ "ko": {
+  "english": "Korean",
+  "native": "한국어",
+  "bank": "안녕하세요 세계 문자 입력 연습 속도 정확 시간 오늘 내일 어제 학교 친구 일 단어 문장 한국어 쉬운 새로운 큰 작은 빠른 느린 아름다운"
+ },
+ "sv": {
+  "english": "Swedish",
+  "native": "Svenska",
+  "bank": "och det att som en på är av för med till den har inte om ett jag du vi ni de men var när hur varför ord skriva snabbt tangentbord värld människa hus skola tid bra"
+ },
+ "no": {
+  "english": "Norwegian",
+  "native": "Norsk",
+  "bank": "og det er en et jeg du vi de som ikke på til med for av har var den der men også ord skrive raskt tastatur verden menneske hus skole tid dag natt god ny"
+ },
+ "da": {
+  "english": "Danish",
+  "native": "Dansk",
+  "bank": "og det er en et jeg du vi de som ikke på til med for af har var den der men også ord skrive hurtigt tastatur verden menneske hus skole tid dag nat god ny"
+ },
+ "fi": {
+  "english": "Finnish",
+  "native": "Suomi",
+  "bank": "ja on ei että se hän me te he minä sinä tämä tuo kanssa mutta myös aika sana sanat kirjoittaa nopeasti näppäimistö maailma ihminen talo koulu päivä yö uusi hyvä pieni suuri"
+ },
+ "cs": {
+  "english": "Czech",
+  "native": "Čeština",
+  "bank": "a v na se je že do z pro jako ale nebo také tento tato to byl jsou být mít čas slovo slova psát rychle klávesnice svět člověk dům škola dobrý nový"
+ },
+ "sk": {
+  "english": "Slovak",
+  "native": "Slovenčina",
+  "bank": "a v na sa je že do z pre ako ale alebo tiež tento táto to bol sú byť mať čas slovo slová písať rýchlo klávesnica svet človek dom škola dobrý nový"
+ },
+ "hu": {
+  "english": "Hungarian",
+  "native": "Magyar",
+  "bank": "és a az egy hogy nem van volt lesz én te ő mi ti ők ez az de vagy is mert mikor hol hogyan szó szavak írni gyors billentyűzet világ ember ház iskola idő jó új"
+ },
+ "ro": {
+  "english": "Romanian",
+  "native": "Română",
+  "bank": "și în de la cu pe este un o eu tu el ea noi voi ei ele dar pentru care când unde cum cuvânt cuvinte scrie repede tastatură lume om casă școală timp bun nou"
+ },
+ "bg": {
+  "english": "Bulgarian",
+  "native": "Български",
+  "bank": "и в на не е че за от до с по като но или това този тази аз ти той тя ние вие те време дума думи пиша бързо клавиатура свят човек дом училище нов добър"
+ },
+ "el": {
+  "english": "Greek",
+  "native": "Ελληνικά",
+  "bank": "και το η ο σε από με για δεν είναι που να θα εγώ εσύ αυτός αυτή εμείς εσείς αυτοί αλλά όταν πού πώς λέξη λέξεις γράφω γρήγορα πληκτρολόγιο κόσμος άνθρωπος σπίτι σχολείο χρόνος"
+ },
+ "he": {
+  "english": "Hebrew",
+  "native": "עברית",
+  "bank": "אני אתה את הוא היא אנחנו אתם הם זה זאת של על עם אל מן לא כן יש אין היה יהיה היום מחר אתמול זמן מילה מילים לכתוב מהר מקלדת עולם אדם בית ספר חדש טוב"
+ },
+ "id": {
+  "english": "Indonesian",
+  "native": "Bahasa Indonesia",
+  "bank": "dan yang di ke dari untuk dengan ini itu adalah saya kamu dia kita mereka tidak ada bisa akan sudah tetapi karena waktu kata menulis cepat papan ketik dunia orang rumah sekolah baik baru"
+ },
+ "ms": {
+  "english": "Malay",
+  "native": "Bahasa Melayu",
+  "bank": "dan yang di ke dari untuk dengan ini itu adalah saya kamu dia kita mereka tidak ada boleh akan sudah tetapi kerana masa perkataan menulis cepat papan kekunci dunia orang rumah sekolah baik baru"
+ },
+ "vi": {
+  "english": "Vietnamese",
+  "native": "Tiếng Việt",
+  "bank": "và là của có không trong một những người tôi bạn chúng ta họ với cho từ đến khi như thế này đó thời gian từ ngữ viết nhanh bàn phím thế giới nhà trường học tốt mới"
+ },
+ "th": {
+  "english": "Thai",
+  "native": "ไทย",
+  "bank": "ฉัน คุณ เขา เธอ เรา พวกเรา บ้าน โรงเรียน เวลา วัน วันนี้ พรุ่งนี้ เมื่อวาน หนังสือ ภาษา คำ ข้อความ เขียน พิมพ์ แป้นพิมพ์ เร็ว ช้า ถูกต้อง สวย ดี ใหม่ โลก เพื่อน ครอบครัว งาน น้ำ อาหาร"
+ },
+ "fa": {
+  "english": "Persian",
+  "native": "فارسی",
+  "bank": "و در به از که این آن برای با من تو او ما شما آنها است بود خواهد یک دو سه روز شب زمان کلمه کلمات نوشتن سریع صفحه کلید جهان انسان خانه مدرسه خوب جدید"
+ },
+ "ur": {
+  "english": "Urdu",
+  "native": "اردو",
+  "bank": "میں تم آپ وہ یہ ہم ہمارا ان کا ایک دو تین ہے ہیں تھا تھے نہیں جی ہاں اور لیکن میں سے کو پر گھر کتاب زبان لفظ الفاظ لکھنا تیز وقت آج کل دوست دنیا اچھا نیا کام سکول"
+ },
+ "bn": {
+  "english": "Bengali",
+  "native": "বাংলা",
+  "bank": "আমি তুমি আপনি সে আমরা তারা এটা ওটা ভালো নতুন পুরানো আজ কাল সময় দিন রাত কাজ স্কুল বাড়ি বই ভাষা শব্দ লেখা দ্রুত ধীরে সঠিক ভুল বন্ধু পৃথিবী মানুষ খাবার জল"
+ },
+ "ta": {
+  "english": "Tamil",
+  "native": "தமிழ்",
+  "bank": "நான் நீ நீங்கள் அவன் அவள் நாம் அவர்கள் இது அது ஒரு நல்ல புதிய பழைய இன்று நாளை நேற்று நேரம் நாள் இரவு வீடு பள்ளி புத்தகம் மொழி சொல் எழுத வேகம் வேலை உலகம் நண்பர் மனிதர்"
+ },
+ "te": {
+  "english": "Telugu",
+  "native": "తెలుగు",
+  "bank": "నేను నువ్వు మీరు అతను ఆమె మనం వారు ఇది అది ఒక మంచి కొత్త పాత ఈరోజు రేపు నిన్న సమయం రోజు రాత్రి ఇల్లు పాఠశాల పుస్తకం భాష పదం రాయడం వేగం పని ప్రపంచం స్నేహితుడు"
+ },
+ "mr": {
+  "english": "Marathi",
+  "native": "मराठी",
+  "bank": "मी तू तुम्ही तो ती आपण ते हे एक आणि पण नाही होय आज उद्या काल वेळ दिवस रात्र घर शाळा पुस्तक भाषा शब्द लिहिणे जलद हळू जग मित्र काम नवा चांगला"
+ },
+ "gu": {
+  "english": "Gujarati",
+  "native": "ગુજરાતી",
+  "bank": "હું તું તમે તે આ અમે તેઓ અને પણ નથી છે હતો આજે કાલે ગઈકાલે સમય દિવસ રાત ઘર શાળા પુસ્તક ભાષા શબ્દ લખવું ઝડપી ધીમું દુનિયા મિત્ર કામ નવું સારું"
+ },
+ "pa": {
+  "english": "Punjabi",
+  "native": "ਪੰਜਾਬੀ",
+  "bank": "ਮੈਂ ਤੂੰ ਤੁਸੀਂ ਉਹ ਇਹ ਅਸੀਂ ਉਹਨਾਂ ਅਤੇ ਪਰ ਨਹੀਂ ਹਾਂ ਹੈ ਸੀ ਅੱਜ ਕੱਲ੍ਹ ਸਮਾਂ ਦਿਨ ਰਾਤ ਘਰ ਸਕੂਲ ਕਿਤਾਬ ਭਾਸ਼ਾ ਸ਼ਬਦ ਲਿਖਣਾ ਤੇਜ਼ ਹੌਲੀ ਦੁਨੀਆ ਦੋਸਤ ਕੰਮ ਨਵਾਂ ਚੰਗਾ"
+ },
+ "sw": {
+  "english": "Swahili",
+  "native": "Kiswahili",
+  "bank": "na ya kwa ni katika mimi wewe yeye sisi ninyi wao hii hiyo lakini pia sana wakati neno maneno kuandika haraka kibodi dunia mtu nyumba shule nzuri mpya kazi siku usiku"
+ },
+ "af": {
+  "english": "Afrikaans",
+  "native": "Afrikaans",
+  "bank": "en die is nie ek jy hy sy ons julle hulle van in op met vir as maar ook hierdie daardie tyd woord woorde tik vinnig sleutelbord wêreld mens huis skool goed nuut"
+ },
+ "sq": {
+  "english": "Albanian",
+  "native": "Shqip",
+  "bank": "unë ti ai ajo ne ju ata ato kjo ky është janë nuk dhe por për me nga në mbi sot nesër dje kohë ditë natë shtëpi shkollë libër gjuhë fjalë shkruaj shpejt mirë botë mik punë"
+ },
+ "hy": {
+  "english": "Armenian",
+  "native": "Հայերեն",
+  "bank": "ես դու նա մենք դուք նրանք սա դա և բայց ոչ այո է էր այսօր վաղը երեկ ժամանակ օր գիշեր տուն դպրոց գիրք լեզու բառ բառեր գրել արագ դանդաղ աշխարհ մարդ ընկեր աշխատանք նոր լավ"
+ },
+ "az": {
+  "english": "Azerbaijani",
+  "native": "Azərbaycanca",
+  "bank": "mən sən o biz siz onlar bu bir və amma deyil var yox bugün sabah dünən vaxt gün gecə ev məktəb kitab dil söz sözlər yazmaq sürətli yavaş dünya insan dost iş yeni yaxşı"
+ },
+ "eu": {
+  "english": "Basque",
+  "native": "Euskara",
+  "bank": "ni zu hura gu zuek haiek hau hori eta baina ez bai da dira izan egun gaur bihar atzo denbora gau etxe eskola liburu hizkuntza hitz idatzi azkar poliki mundu lagun lan berri on"
+ },
+ "be": {
+  "english": "Belarusian",
+  "native": "Беларуская",
+  "bank": "я ты ён яна мы вы яны гэта той тая і але не так ёсць быў сёння заўтра ўчора час дзень ноч дом школа кніга мова слова словы пісаць хутка павольна свет чалавек сябра праца новы добры"
+ },
+ "bs": {
+  "english": "Bosnian",
+  "native": "Bosanski",
+  "bank": "ja ti on ona mi vi oni one ovaj ova ovo i ali ili ne da jeste bio danas sutra jučer vrijeme dan noć kuća škola knjiga jezik riječ riječi pisati brzo sporo svijet prijatelj posao novo dobro"
+ },
+ "ca": {
+  "english": "Catalan",
+  "native": "Català",
+  "bank": "i el la els les de que en un una és per amb com més però també jo tu nosaltres vosaltres ells temps paraula paraules escriure ràpid teclat món persona casa escola bo nou"
+ },
+ "hr": {
+  "english": "Croatian",
+  "native": "Hrvatski",
+  "bank": "i u na je da se za od do s po kao ali ili ovaj ova ovo ja ti on ona mi vi oni vrijeme riječ riječi pisati brzo tipkovnica svijet čovjek kuća škola dobro novo"
+ },
+ "et": {
+  "english": "Estonian",
+  "native": "Eesti",
+  "bank": "mina sina tema meie teie nemad see need ja aga ei jah on oli täna homme eile aeg päev öö maja kool raamat keel sõna sõnad kirjutama kiiresti aeglaselt maailm sõber töö uus hea"
+ },
+ "fil": {
+  "english": "Filipino",
+  "native": "Filipino",
+  "bank": "ang ng sa at ay mga ako ikaw siya kami tayo kayo sila ito iyon para mula may wala hindi oo oras salita mga salita sumulat mabilis tipahan mundo tao bahay paaralan bago maganda"
+ },
+ "gl": {
+  "english": "Galician",
+  "native": "Galego",
+  "bank": "eu ti el ela nós vós eles elas este esta iso e pero non si é son hoxe mañá onte tempo día noite casa escola libro lingua palabra palabras escribir rápido lento mundo amigo traballo novo bo"
+ },
+ "ka": {
+  "english": "Georgian",
+  "native": "ქართული",
+  "bank": "მე შენ ის ჩვენ თქვენ ისინი ეს და მაგრამ არა დიახ არის იყო დღეს ხვალ გუშინ დრო დღე ღამე სახლი სკოლა წიგნი ენა სიტყვა სიტყვები წერა სწრაფად ნელა მსოფლიო მეგობარი საქმე ახალი კარგი"
+ },
+ "is": {
+  "english": "Icelandic",
+  "native": "Íslenska",
+  "bank": "ég þú hann hún við þið þeir þær þetta og en ekki já er var í á með fyrir frá núna ídag morgun gær tími dagur nótt hús skóli bók tungumál orð skrifa hratt hægt heimur vinur vinna nýr góður"
+ },
+ "ga": {
+  "english": "Irish",
+  "native": "Gaeilge",
+  "bank": "mé tú sé sí sinn sibh siad seo sin agus ach ní tá bhí inniu amárach inné am lá oíche teach scoil leabhar teanga focal focail scríobh tapa mall domhan cara obair nua maith"
+ },
+ "kk": {
+  "english": "Kazakh",
+  "native": "Қазақша",
+  "bank": "мен сен ол біз сіз олар бұл және бірақ жоқ иә бар еді бүгін ертең кеше уақыт күн түн үй мектеп кітап тіл сөз сөздер жазу жылдам баяу әлем адам дос жұмыс жаңа жақсы"
+ },
+ "km": {
+  "english": "Khmer",
+  "native": "ខ្មែរ",
+  "bank": "ខ្ញុំ អ្នក គាត់ នាង យើង ពួកគេ នេះ នោះ និង ប៉ុន្តែ មិន បាទ មាន ថ្ងៃនេះ ស្អែក ម្សិលមិញ ពេលវេលា ថ្ងៃ យប់ ផ្ទះ សាលា សៀវភៅ ភាសា ពាក្យ សរសេរ លឿន យឺត ពិភពលោក មិត្តភក្តិ ការងារ ល្អ"
+ },
+ "lo": {
+  "english": "Lao",
+  "native": "ລາວ",
+  "bank": "ຂ້ອຍ ເຈົ້າ ລາວ ພວກເຮົາ ພວກເຂົາ ນີ້ ນັ້ນ ແລະ ແຕ່ ບໍ່ ແມ່ນ ມີ ມື້ນີ້ ມື້ອື່ນ ມື້ວານ ເວລາ ມື້ ຄືນ ເຮືອນ ໂຮງຮຽນ ປຶ້ມ ພາສາ ຄຳ ຂຽນ ໄວ ຊ້າ ໂລກ ໝູ່ ວຽກ ດີ"
+ },
+ "lv": {
+  "english": "Latvian",
+  "native": "Latviešu",
+  "bank": "es tu viņš viņa mēs jūs viņi viņas tas tā un bet ne jā ir bija šodien rīt vakar laiks diena nakts māja skola grāmata valoda vārds vārdi rakstīt ātri lēni pasaule draugs darbs jauns labs"
+ },
+ "lt": {
+  "english": "Lithuanian",
+  "native": "Lietuvių",
+  "bank": "aš tu jis ji mes jūs jie jos tai ir bet ne taip yra buvo šiandien rytoj vakar laikas diena naktis namas mokykla knyga kalba žodis žodžiai rašyti greitai lėtai pasaulis draugas darbas naujas geras"
+ },
+ "mk": {
+  "english": "Macedonian",
+  "native": "Македонски",
+  "bank": "јас ти тој таа ние вие тие ова тоа и но не да е беше денес утре вчера време ден ноќ куќа училиште книга јазик збор зборови пишува брзо бавно свет човек пријател работа нов добро"
+ },
+ "mn": {
+  "english": "Mongolian",
+  "native": "Монгол",
+  "bank": "би чи тэр бид та нар тэд энэ тэр болон гэхдээ үгүй тийм байна байсан өнөөдөр маргааш өчигдөр цаг өдөр шөнө гэр сургууль ном хэл үг үгс бичих хурдан удаан дэлхий найз ажил шинэ сайн"
+ },
+ "ne": {
+  "english": "Nepali",
+  "native": "नेपाली",
+  "bank": "म तिमी तपाईं ऊ उनी हामी उनीहरू यो त्यो र तर होइन हो छ थियो आज भोलि हिजो समय दिन रात घर विद्यालय किताब भाषा शब्द शब्दहरू लेख्नु छिटो ढिलो संसार साथी काम नयाँ राम्रो"
+ },
+ "sr": {
+  "english": "Serbian",
+  "native": "Српски",
+  "bank": "и у на је да се за од до са по као али или овај ова ово ја ти он она ми ви они време реч речи писати брзо тастатура свет човек кућа школа добро ново"
+ },
+ "sl": {
+  "english": "Slovenian",
+  "native": "Slovenščina",
+  "bank": "jaz ti on ona mi vi oni one to ta in ampak ne da je bil danes jutri včeraj čas dan noč hiša šola knjiga jezik beseda besede pisati hitro počasi svet prijatelj delo novo dobro"
+ },
+ "so": {
+  "english": "Somali",
+  "native": "Soomaali",
+  "bank": "aniga adiga isaga iyada annaga idinka iyaga kan tan iyo laakiin maya haa waa ahaa maanta berri shalay waqti maalin habeen guri dugsi buug luqad eray erayo qor degdeg tartiib adduun saaxiib shaqo cusub fiican"
+ },
+ "uz": {
+  "english": "Uzbek",
+  "native": "Oʻzbekcha",
+  "bank": "men sen u biz siz ular bu va lekin emas ha bor edi bugun ertaga kecha vaqt kun tun uy maktab kitob til soʻz soʻzlar yozish tez sekin dunyo doʻst ish yangi yaxshi"
+ },
+ "cy": {
+  "english": "Welsh",
+  "native": "Cymraeg",
+  "bank": "fi ti ef hi ni chi nhw hwn hon a ond nid ie mae roedd heddiw yfory ddoe amser dydd nos tŷ ysgol llyfr iaith gair geiriau ysgrifennu cyflym araf byd ffrind gwaith newydd da"
+ },
+ "yi": {
+  "english": "Yiddish",
+  "native": "ייִדיש",
+  "bank": "איך דו ער זי מיר איר זיי דאָס יענער און אָבער נישט יאָ איז געווען הײַנט מאָרגן נעכטן צײַט טאָג נאַכט הויז שולע בוך שפּראַך וואָרט ווערטער שרײַבן שנעל פּאַמעלעך וועלט פֿרײַנד אַרבעט נײַ גוט"
+ },
+ "zu": {
+  "english": "Zulu",
+  "native": "isiZulu",
+  "bank": "mina wena yena thina nina bona lokhu lokho futhi kodwa cha yebo kukhona namuhla kusasa izolo isikhathi usuku ubusuku indlu isikole incwadi ulimi igama amagama bhala ngokushesha kancane umhlaba umngane umsebenzi okusha kuhle"
+ }
+}

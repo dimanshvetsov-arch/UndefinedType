@@ -13,10 +13,17 @@ const users = new Map();
 const rooms = new Map();
 const clients = new Set();
 const queue = [];
+// Same 70 language word lists used by the solo typing mode.
+const languageBanks = require('./languages.json');
+const supportedLanguage = code => typeof code === 'string' && Object.prototype.hasOwnProperty.call(languageBanks, code);
+const languageOrDefault = code => code === undefined ? 'en' : supportedLanguage(code) ? code : null;
+const languageLabel = code => languageBanks[code]?.english || 'English';
 let database;
 
-const wordBank = 'the quick brown fox jumps over the lazy dog typing practice keyboard speed accuracy focus modern design challenge world always never another little after before under above between around smooth rhythm learn create better simple words text people time every day can make this work well and grow fast with care'.split(' ');
-const makeText = (words=80) => Array.from({length: words}, () => wordBank[crypto.randomInt(wordBank.length)]).join(' ');
+const makeText = (words=80,language='en') => {
+  const bank=(languageBanks[language]?.bank||languageBanks.en.bank).split(/\s+/u).filter(Boolean);
+  return Array.from({length:words},()=>bank[crypto.randomInt(bank.length)]).join(' ');
+};
 const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
 const respond = (res, code, data) => {res.writeHead(code, {'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options':'nosniff'}); res.end(JSON.stringify(data));};
 const publicUser = u => ({username:u.username, elo:u.elo || 1000, wins:u.wins || 0, losses:u.losses || 0, draws:u.draws || 0});
@@ -86,13 +93,13 @@ async function saveUsers(changed) {
   }
 }
 
-function view(r){return {type:'room',code:r.code,visibility:r.visibility,ranked:r.ranked,status:r.status,duration:r.duration,wordCount:r.wordCount,
+function view(r){return {type:'room',code:r.code,visibility:r.visibility,ranked:r.ranked,status:r.status,duration:r.duration,wordCount:r.wordCount,language:r.language,
   players:r.players.map(p=>({id:p.id,name:p.user.username,elo:p.user.elo||1000,progress:p.progress,position:p.position,correct:p.correct,wpm:p.wpm,accuracy:p.accuracy})),
   matchmaking:r.matchmaking||false,startAt:r.startAt||0, serverTime:Date.now()};}
 function broadcast(r,msg) {for(const p of r.players) send(p.ws,msg);}
 function lobby() {
   const open=[...rooms.values()].filter(r=>r.visibility==='public'&&r.status==='waiting'&&r.players.length===1)
-    .map(r=>({code:r.code,host:r.players[0].user.username,players:r.players.length,duration:r.duration,wordCount:r.wordCount}));
+    .map(r=>({code:r.code,host:r.players[0].user.username,players:r.players.length,duration:r.duration,wordCount:r.wordCount,language:r.language}));
   const message={type:'lobby',rooms:open,queue:queue.length};
   for(const ws of clients) send(ws,message);
 }
@@ -130,17 +137,17 @@ function join(ws,r) {
   if(r.players.length===2) startCountdown(r);
   lobby();
 }
-function createRoom(ws,visibility,ranked,wordCount=80) {
+function createRoom(ws,visibility,ranked,wordCount=80,language='en') {
   leave(ws);
-  const r={code:uniqueCode(),visibility,ranked,duration:0,wordCount:[30,60,100,150].includes(wordCount)?wordCount:80,status:'waiting',players:[],startAt:0,text:'',timer:null,endTimer:null};
+  const r={code:uniqueCode(),visibility,ranked,language,duration:0,wordCount:[30,60,100,150].includes(wordCount)?wordCount:80,status:'waiting',players:[],startAt:0,text:'',timer:null,endTimer:null};
   rooms.set(r.code,r);join(ws,r);
   return r;
 }
 function startCountdown(r) {
   if(r.status!=='waiting'||r.players.length!==2) return;
-  r.status='countdown';r.text=makeText(r.wordCount);r.startAt=Date.now()+5000;
+  r.status='countdown';r.text=makeText(r.wordCount,r.language);r.startAt=Date.now()+5000;
   broadcast(r,view(r));
-  broadcast(r,{type:'countdown',text:r.text,startAt:r.startAt,serverTime:Date.now(),duration:r.duration});
+  broadcast(r,{type:'countdown',text:r.text,language:r.language,startAt:r.startAt,serverTime:Date.now(),duration:r.duration});
   r.timer=setTimeout(()=>{
     if(r.status!=='countdown'||r.players.length!==2) return;
     r.status='running';broadcast(r,{type:'start',startAt:r.startAt,serverTime:Date.now()});
@@ -186,11 +193,11 @@ function checkQueue() {
   for(let i=0;i<queue.length;i++) {
     const a=queue[i],aWait=(Date.now()-a.queuedAt)/1000;
     const rangeA=Math.min(2000,150+Math.floor(aWait/5)*75);
-    const j=queue.findIndex((b,k)=>k>i&&b.user&&b.queueMode===a.queueMode&&usernameKey(b.user.username)!==usernameKey(a.user.username)
+    const j=queue.findIndex((b,k)=>k>i&&b.user&&b.queueMode===a.queueMode&&b.queueLanguage===a.queueLanguage&&usernameKey(b.user.username)!==usernameKey(a.user.username)
       &&(a.queueMode==='unranked'||Math.abs((a.user.elo||1000)-(b.user.elo||1000)) <= Math.max(rangeA,Math.min(2000,150+Math.floor((Date.now()-b.queuedAt)/5000)*75))));
     if(j<0)continue;
     const b=queue[j];removeQueue(a);removeQueue(b);
-    const r=createRoom(a,'private',a.queueMode!=='unranked',80);r.matchmaking=true;join(b,r);
+    const r=createRoom(a,'private',a.queueMode!=='unranked',80,a.queueLanguage||'en');r.matchmaking=true;join(b,r);
     send(a,{type:'matchFound'});send(b,{type:'matchFound'});
     lobby();return;
   }
@@ -230,6 +237,7 @@ const server=http.createServer((req,res)=>{
   let pathname;
   try {pathname=new URL(req.url,'http://localhost').pathname;}catch{return respond(res,400,{error:'Invalid URL'});}
   if(pathname==='/health')return respond(res,200,{ok:true});
+  if(pathname==='/api/languages' && req.method==='GET')return respond(res,200,{languages:Object.entries(languageBanks).map(([code,details])=>({code,english:details.english,native:details.native}))});
   if(pathname==='/api/me')return respond(res,200,{user:authRequest(req)?publicUser(authRequest(req)):null});
   if(pathname==='/api/leaderboard')return respond(res,200,{players:[...users.values()].map(publicUser).sort((a,b)=>b.elo-a.elo||b.wins-a.wins).slice(0,50)});
   if(pathname==='/api/auth'&&req.method==='POST') {
@@ -280,11 +288,17 @@ wss.on('connection',(ws,req)=>{
     if(m.type==='lobby') {lobby();return;}
     if(!ws.user)return send(ws,{type:'error',message:'Log in to play multiplayer.'});
     if(m.type==='leave') {leave(ws);send(ws,{type:'leftRoom'});return;}
-    if(m.type==='create') {createRoom(ws,m.visibility==='public'?'public':'private',false,Number(m.wordCount));return;}
+    if(m.type==='create') {
+      const lang=languageOrDefault(m.language);
+      if(!lang)return send(ws,{type:'error',message:'Unsupported text language.'});
+      createRoom(ws,m.visibility==='public'?'public':'private',false,Number(m.wordCount),lang);return;
+    }
     if(m.type==='join') {const r=rooms.get(String(m.code||'').toUpperCase());return r?join(ws,r):send(ws,{type:'error',message:'Room not found.'});}
     if(m.type==='queue') {
+      const lang=languageOrDefault(m.language);
+      if(!lang)return send(ws,{type:'error',message:'Unsupported text language.'});
       if(ws.room){leave(ws);}
-      if(!queue.includes(ws)){ws.queuedAt=Date.now();ws.queueMode=m.mode==='unranked'?'unranked':'ranked';queue.push(ws);send(ws,{type:'queued',mode:ws.queueMode});}
+      if(!queue.includes(ws)){ws.queuedAt=Date.now();ws.queueMode=m.mode==='unranked'?'unranked':'ranked';ws.queueLanguage=lang;queue.push(ws);send(ws,{type:'queued',mode:ws.queueMode,language:lang});}
       checkQueue();lobby();return;
     }
     if(m.type==='cancelQueue'){removeQueue(ws);send(ws,{type:'queueCancelled'});lobby();return;}
@@ -296,7 +310,7 @@ wss.on('connection',(ws,req)=>{
 const queueTimer=setInterval(checkQueue,1000);
 queueTimer.unref?.();
 async function start() {
-  try{await initializeStorage();server.listen(PORT,'0.0.0.0',()=>console.log(`UndefinedType v1.8 online at port ${PORT}`));}
+  try{await initializeStorage();server.listen(PORT,'0.0.0.0',()=>console.log(`UndefinedType v1.9 online at port ${PORT}`));}
   catch(e){console.error('Cannot start: storage initialization failed.',e);process.exitCode=1;}
 }
 if(require.main===module) start();

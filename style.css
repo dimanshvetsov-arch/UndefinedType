@@ -373,3 +373,26 @@ footer{border-top:1px solid rgba(255,255,255,.05)}
 #raceResult{max-width:900px}
 @media(max-width:860px){.mode-cards{grid-template-columns:1fr 1fr}.room-studio-grid{grid-template-columns:1fr}.studio-footer{flex-wrap:wrap}}
 @media(max-width:600px){.mode-cards{grid-template-columns:1fr}.mode-card{min-height:195px}.room-studio{padding:18px}.studio-footer{flex-direction:column;align-items:stretch}.studio-footer #createRoom{width:100%}.studio-footer .join-code input{flex:1;width:100px}.race-stat-line{gap:20px}.race-stat-line strong{font-size:17px}.race-stat-line .race-time strong{font-size:28px}.race-shared-text{font-size:19px}}
+
+/* v1.9 — searchable text-language selector for every multiplayer mode */
+.multi-language-panel{display:flex;justify-content:space-between;align-items:center;gap:26px;margin:18px 0 22px;padding:18px 22px;background:#202327;border:1px solid #3d4148;border-radius:15px;position:relative;z-index:8}
+.multi-language-copy{max-width:540px}
+.multi-language-copy h3{margin:7px 0 4px;font-size:19px;letter-spacing:-.5px;color:#e2e5e9}
+.multi-language-copy p{font-size:12px;line-height:1.6;color:#a4aab5;margin:0}
+.multi-language-copy .mode-kicker{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.6px;color:var(--accent)}
+.multi-language-control{position:relative;min-width:250px;max-width:100%}
+#multiplayerLanguageButton{background:#16191d;color:#f0f1f4;border:1px solid #51555e;border-radius:10px;padding:13px 16px;min-width:250px;width:100%;display:flex;gap:12px;align-items:center;justify-content:space-between;font:inherit;font-weight:650;cursor:pointer}
+#multiplayerLanguageButton:hover,#multiplayerLanguageButton[aria-expanded=true]{border-color:var(--accent)}
+.multi-language-popup{position:absolute;right:0;top:calc(100% + 8px);z-index:65;width:min(365px,calc(100vw - 46px));padding:13px;background:#26292e;border:1px solid #50545c;border-radius:13px;box-shadow:0 24px 55px rgba(0,0,0,.52)}
+.multi-language-popup.hidden{display:none}
+.multi-language-popup .language-search-wrap{margin-bottom:10px}
+.multi-language-count{color:#90969f;font-size:11px;padding:4px 8px 9px}
+#multiplayerLanguageOptions{max-height:292px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#565b65 transparent}
+.multi-language-option{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 22px;gap:8px;align-items:center;text-align:left;color:#d9dde4;width:100%;border:0;background:transparent;border-radius:9px;padding:11px 10px;cursor:pointer;font:inherit}
+.multi-language-option strong{font-size:12px}
+.multi-language-option span{font-size:12px;color:#b4b7c2;overflow-wrap:anywhere}
+.multi-language-option[aria-selected=true] strong,.multi-language-option .multi-lang-check{color:var(--accent)}
+.multi-language-option:hover,.multi-language-option:focus-visible{background:#343840;outline:none}
+#roomLanguage{font-size:12px;color:#bdc2cb;margin:2px 0 9px}
+.race-shared-text[dir=rtl]{direction:rtl;text-align:right;unicode-bidi:plaintext}
+@media(max-width:780px){.multi-language-panel{flex-direction:column;align-items:stretch;gap:14px}.multi-language-control{width:100%}.multi-language-popup{left:0;right:auto}}

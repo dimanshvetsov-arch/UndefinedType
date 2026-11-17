@@ -155,3 +155,49 @@ test('both racers must finish before unranked results, and corrected mistakes co
   assert.equal(a.user.elo,oldEloA);assert.equal(b.user.elo,oldEloB);
   a.receive({type:'leave'});b.receive({type:'leave'});a.close();b.close();
 });
+
+test('multiplayer languages match the solo banks and have no empty dictionaries',async()=>{
+  const response=await fetch(base+'/api/languages');assert.equal(response.status,200);
+  const {languages}=await response.json();assert.equal(languages.length,70);
+  for(const code of ['en','de','es','ru','ja','zh','ar'])assert.ok(languages.some(x=>x.code===code));
+  const file=require('../server/languages.json');
+  assert.ok(Object.values(file).every(x=>x.bank.split(/\s+/).filter(Boolean).length>=5));
+});
+test('private room host chooses language and both players receive exactly its word bank',async()=>{
+  const aToken=await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username:'Alice',password:'strongPassword123'})}).then(r=>r.json());
+  const bToken=await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username:'Bob',password:'strongPassword123'})}).then(r=>r.json());
+  const a=makeSocket(),b=makeSocket();a.receive({type:'auth',token:aToken.token});b.receive({type:'auth',token:bToken.token});
+  a.receive({type:'create',visibility:'private',wordCount:30,language:'ru'});
+  const code=a.latest('room').code;assert.equal(a.latest('room').language,'ru');
+  b.receive({type:'join',code});
+  assert.equal(b.latest('room').language,'ru');
+  const start=a.latest('countdown'),other=b.latest('countdown');
+  assert.equal(start.text,other.text);assert.equal(start.language,'ru');
+  assert.equal(start.text.split(' ').length,30);
+  const valid=new Set(require('../server/languages.json').ru.bank.split(/\s+/));
+  for(const word of start.text.split(' '))assert.ok(valid.has(word),`Unexpected Russian word ${word}`);
+  a.receive({type:'leave'});b.receive({type:'leave'});a.close();b.close();
+});
+test('ranked and unranked queue pair only same selected language, still preserve Elo rules',async()=>{
+  const tokens=await Promise.all(['Alice','Bob','Carol'].map(async username =>
+    (await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username,password:'strongPassword123'})})).json()
+  ));
+  const socks=tokens.map(()=>makeSocket());socks.forEach((s,i)=>s.receive({type:'auth',token:tokens[i].token}));
+  socks[0].receive({type:'queue',mode:'ranked',language:'de'});
+  socks[1].receive({type:'queue',mode:'ranked',language:'es'});
+  assert.equal(socks[0].room,null);assert.equal(socks[1].room,null);
+  socks[2].receive({type:'queue',mode:'ranked',language:'de'});
+  assert.ok(socks[0].room);assert.equal(socks[0].room,socks[2].room);
+  const r=engine.rooms.get(socks[0].room);assert.equal(r.language,'de');assert.equal(r.ranked,true);
+  assert.ok(r.text.split(' ').every(w=>require('../server/languages.json').de.bank.split(/\s+/).includes(w)));
+  assert.equal(socks[1].room,null,'Spanish queue must not join a German race');
+  for(const s of socks){s.receive({type:'leave'});s.close();}
+});
+test('unsupported language is rejected on the server',async()=>{
+  const token=await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username:'Alice',password:'strongPassword123'})}).then(r=>r.json());
+  const s=makeSocket();s.receive({type:'auth',token:token.token});
+  s.receive({type:'create',visibility:'public',language:'not-real'});
+  assert.match(s.latest('error').message,/Unsupported text language/);assert.equal(s.room,null);
+  s.receive({type:'queue',mode:'ranked',language:'xx'});
+  assert.match(s.latest('error').message,/Unsupported text language/);assert.equal(engine.queue.includes(s),false);s.close();
+});

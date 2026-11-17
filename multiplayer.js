@@ -6,7 +6,61 @@
   let me = '', user = null, token = localStorage.getItem('ut_token') || '';
   let room = null, phase = 'waiting', matchText = '', startAt = 0, duration = 30, clockOffset = 0;
   let countdownTimer = null, queued = false, queueMode = 'ranked', typingValue = '', positions = {}, players = {};
-  let audioContext = null, finishedMine = false;
+  let audioContext = null, finishedMine = false, composingRaceText = false;
+  let multiplayerLanguages = [{code:'en',english:'English',native:'English'}];
+  let selectedLanguage = localStorage.getItem('ut_multiplayer_language') || 'en';
+  let languagePopupOpen = false;
+  const languageIsRTL = code => ['ar','he','fa','ur','yi'].includes(code);
+  const activeLanguage = () => multiplayerLanguages.find(x=>x.code===selectedLanguage) || multiplayerLanguages[0];
+  const prettyLanguage = lang => lang ? `${lang.english} · ${lang.native}` : 'English · English';
+  function closeLanguageMenu(){languagePopupOpen=false;$('multiplayerLanguagePopup').classList.add('hidden');$('multiplayerLanguageButton').setAttribute('aria-expanded','false');}
+  function paintLanguageList(search='') {
+    const text=search.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase().trim();
+    const filtered=multiplayerLanguages.filter(x=>[x.english,x.native,x.code].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase().includes(text));
+    $('multiplayerLanguageCount').textContent=`${filtered.length} of ${multiplayerLanguages.length} languages`;
+    const list=$('multiplayerLanguageOptions');list.replaceChildren();
+    if(!filtered.length){const none=document.createElement('p');none.className='language-empty';none.textContent='No matching languages';list.append(none);}
+    for(const lang of filtered){
+      const button=document.createElement('button');button.type='button';button.className='multi-language-option';
+      button.setAttribute('role','option');button.setAttribute('aria-selected',String(lang.code===selectedLanguage));
+      const title=document.createElement('strong');title.textContent=lang.english;
+      const native=document.createElement('span');native.textContent=lang.native;native.setAttribute('dir','auto');
+      const check=document.createElement('span');check.className='multi-lang-check';check.textContent=lang.code===selectedLanguage?'✓':'';
+      button.append(title,native,check);button.onclick=()=>chooseMultiplayerLanguage(lang.code);list.append(button);
+    }
+  }
+  function chooseMultiplayerLanguage(code) {
+    const item=multiplayerLanguages.find(x=>x.code===code);if(!item)return;
+    if(queued){status('Cancel the current match search before changing the language.',true);return;}
+    selectedLanguage=code;localStorage.setItem('ut_multiplayer_language',code);
+    $('multiplayerLanguageValue').textContent=prettyLanguage(item);
+    document.querySelectorAll('.queue-language').forEach(el=>{el.textContent=item.english;});
+    closeLanguageMenu();status(`Text language set to ${item.english}.`);
+  }
+  async function loadLanguages() {
+    try {
+      const response=await fetch('/api/languages');if(!response.ok)throw Error('Could not load languages');
+      const data=await response.json();
+      if(!Array.isArray(data.languages)||!data.languages.length)throw Error('No languages returned');
+      multiplayerLanguages=data.languages.filter(l=>typeof l.code==='string'&&typeof l.english==='string'&&typeof l.native==='string');
+      if(!multiplayerLanguages.some(l=>l.code===selectedLanguage))selectedLanguage='en';
+      $('multiplayerLanguageValue').textContent=prettyLanguage(activeLanguage());
+      document.querySelectorAll('.queue-language').forEach(el=>{el.textContent=activeLanguage().english;});
+      paintLanguageList();
+    }catch(e){console.warn('Multiplayer language list unavailable:',e);paintLanguageList();}
+  }
+  $('multiplayerLanguageButton').addEventListener('click',()=>{
+    if(languagePopupOpen){closeLanguageMenu();return;}
+    languagePopupOpen=true;$('multiplayerLanguagePopup').classList.remove('hidden');$('multiplayerLanguageButton').setAttribute('aria-expanded','true');
+    $('multiplayerLanguageSearch').value='';paintLanguageList();$('multiplayerLanguageSearch').focus();
+  });
+  $('multiplayerLanguageSearch').addEventListener('input',e=>paintLanguageList(e.target.value));
+  $('multiplayerLanguageSearch').addEventListener('keydown',e=>{
+    if(e.key==='Escape'){e.preventDefault();closeLanguageMenu();$('multiplayerLanguageButton').focus();}
+    else if(e.key==='Enter'){e.preventDefault();$('multiplayerLanguageOptions button')?.click();}
+  });
+  document.addEventListener('pointerdown',e=>{if(!$('multiplayerLanguageControl').contains(e.target))closeLanguageMenu();});
+
   let sharedChars = [], sharedWords = [], ownPainted = '', otherPainted = 0;
   let youPosition = 0, opponentPosition = 0;
   let markerFrame = 0;
@@ -156,7 +210,7 @@
     for(const r of rooms) {
       const button=document.createElement('button');button.className='room-list-entry';
       const name=document.createElement('strong');name.textContent=r.host;
-      const details=document.createElement('span');details.textContent=`${r.wordCount||80} words · ${r.players}/2 players · ${r.code}`;
+      const details=document.createElement('span');details.textContent=`${r.wordCount||80} words · ${multiplayerLanguages.find(l=>l.code===r.language)?.english||r.language||'English'} · ${r.players}/2 players · ${r.code}`;
       button.append(name,details);
       button.onclick=()=>send({type:'join',code:r.code});list.append(button);
     }
@@ -284,7 +338,8 @@
     phase='countdown';typingValue='';otherPainted=0;ownPainted='';youPosition=0;opponentPosition=0;
     positions={};finishedMine=false;$('raceFinishNotice').classList.add('hidden');
     $('raceTimeLabel').textContent='starts in';$('raceLiveWpm').textContent='0';$('raceLiveAccuracy').textContent='100%';
-    $('racePassageLength').textContent=`${matchText.trim().split(/\s+/).length} words`;
+    $('racePassageLength').textContent=`${matchText.trim().split(/\s+/).length} words · ${multiplayerLanguages.find(l=>l.code===m.language)?.english||m.language||'English'}`;
+    $('raceSharedText').setAttribute('dir',languageIsRTL(m.language)?'rtl':'ltr');
     $('raceResult').replaceChildren();
     $('raceInput').disabled=true;$('raceInput').value='';$('raceInput').maxLength=matchText.length;
     $('raceSharedViewport').scrollTop=0;
@@ -317,12 +372,15 @@
   function focusRace() {if(!room||phase!=='running'||!page.classList.contains('active'))return;$('raceInput').focus({preventScroll:true});}
   $('raceSharedViewport').addEventListener('click',focusRace);
   document.querySelector('[data-page="multiplayer"]').addEventListener('click',()=>setTimeout(focusRace,0));
+  // Native-script input methods can emit unfinished syllables: do not submit them.
+  $('raceInput').addEventListener('compositionstart',()=>{composingRaceText=true;});
+  $('raceInput').addEventListener('compositionend',()=>{composingRaceText=false;processRaceInput();});
   $('raceInput').addEventListener('paste',e=>{e.preventDefault();status('Pasting is disabled during races.');});
   $('raceInput').addEventListener('drop',e=>e.preventDefault());
   // Enter works like Space only when the passage expects a space,
   // such as at the end of a wrapped visual line.
   $('raceInput').addEventListener('keydown',e=>{
-    if(e.key!=='Enter')return;
+    if(e.key!=='Enter'||e.isComposing||composingRaceText)return;
     e.preventDefault();
     if(phase!=='running'||finishedMine)return;
     const next=matchText[typingValue.length];
@@ -332,13 +390,15 @@
     showOwnText(value);playKeySound();
     send({type:'input',value});
   });
-  $('raceInput').addEventListener('input',()=>{
+  function processRaceInput(){
+    if(composingRaceText)return;
     if(phase!=='running'||finishedMine) {$('raceInput').value=typingValue;return;}
     const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
     if(val!==$('raceInput').value)$('raceInput').value=val;
     showOwnText(val);playKeySound();
     send({type:'input',value:val});
-  });
+  }
+  $('raceInput').addEventListener('input',processRaceInput);
   function playKeySound(){
     try{audioContext=audioContext||new(window.AudioContext||window.webkitAudioContext)();
       if(audioContext.state==='suspended')audioContext.resume();
@@ -400,7 +460,7 @@
       } else status(m.message,true);
     }
     if(m.type==='lobby')drawLobby(m.rooms,m.queue);
-    if(m.type==='queued') {queued=true;$('queueIndicator').classList.remove('hidden');$('queueTitle').textContent=queueMode==='ranked'?'⟳ searching ranked…':'⟳ searching unranked…';status(queueMode==='ranked'?'Finding an opponent with similar Elo…':'Finding an unranked opponent…');}
+    if(m.type==='queued') {queued=true;$('queueIndicator').classList.remove('hidden');$('queueTitle').textContent=(queueMode==='ranked'?'⟳ searching ranked':'⟳ searching unranked')+` · ${multiplayerLanguages.find(l=>l.code===(m.language||selectedLanguage))?.english||'English'}…`; status(queueMode==='ranked'?'Finding an opponent with similar Elo…':'Finding an unranked opponent…');}
     if(m.type==='queueCancelled') {queued=false;$('queueIndicator').classList.add('hidden');status('Match search cancelled.');}
     if(m.type==='matchFound') {queued=false;$('queueIndicator').classList.add('hidden');status('Match found! Starting automatically…');}
     if(m.type==='room') {
@@ -409,6 +469,7 @@
       room=m;players=Object.fromEntries(m.players.map(p=>[p.id,p]));
       $('lobbySection').classList.add('hidden');$('onlineRoom').classList.remove('hidden');
       $('roomCode').textContent=m.code;
+      $('roomLanguage').textContent=`◎ text language: ${multiplayerLanguages.find(l=>l.code===m.language)?.english||m.language||'English'}`;
       const url=new URL(location.href);url.searchParams.set('room',m.code);
       $('roomInviteUrl').value=url.href;
       $('roomInviteRow').classList.toggle('hidden',m.status!=='waiting');
@@ -453,11 +514,11 @@
       });
     }));
   }
-  $('createRoom').onclick=()=>send({type:'create',visibility:$('roomVisibility').value,wordCount:Number($('onlineDuration').value)});
+  $('createRoom').onclick=()=>send({type:'create',visibility:$('roomVisibility').value,wordCount:Number($('onlineDuration').value),language:selectedLanguage});
   $('joinRoom').onclick=()=>{const code=$('joinCode').value.trim().toUpperCase();if(code)send({type:'join',code});else status('Enter your room code first.',true);};
   $('joinCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('joinRoom').click();});
-  $('rankedQueue').onclick=()=>{if(queued)return;queueMode='ranked';send({type:'queue',mode:'ranked'});};
-  $('unrankedQueue').onclick=()=>{if(queued)return;queueMode='unranked';send({type:'queue',mode:'unranked'});};
+  $('rankedQueue').onclick=()=>{if(queued)return;queueMode='ranked';send({type:'queue',mode:'ranked',language:selectedLanguage});};
+  $('unrankedQueue').onclick=()=>{if(queued)return;queueMode='unranked';send({type:'queue',mode:'unranked',language:selectedLanguage});};
   $('cancelQueue').onclick=()=>send({type:'cancelQueue'});
   $('leaveRoom').onclick=()=>{send({type:'leave'});showLobby();};
   $('copyInvite').onclick=async()=>{
@@ -489,5 +550,5 @@
   }
   updateProfile();
   if (pendingInvite) document.querySelector('[data-page="multiplayer"]').click();
-  restoreAccount();refreshLeaderboard();connect();
+  loadLanguages();restoreAccount();refreshLeaderboard();connect();
 })();
