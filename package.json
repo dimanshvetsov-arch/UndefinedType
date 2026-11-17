@@ -1,0 +1,1 @@
+{"name":"undefinedtype","version":"0.9.0","private":true,"scripts":{"start":"node server/index.js","check":"node --check app.js && node --check multiplayer.js && node --check server/index.js"},"engines":{"node":">=20"},"dependencies":{"ws":"^8.18.0"}}
