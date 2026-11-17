@@ -8,7 +8,7 @@
   let countdownTimer = null, queued = false, queueMode = 'ranked', typingValue = '', positions = {}, players = {};
   let audioContext = null, finishedMine = false, composingRaceText = false;
   let multiplayerLanguages = [{code:'en',english:'English',native:'English'}];
-  let selectedLanguage = localStorage.getItem('ut_multiplayer_language') || 'en';
+  let selectedLanguage = 'en'; // New rooms default to English every visit.
   let languagePopupOpen = false;
   const languageIsRTL = code => ['ar','he','fa','ur','yi'].includes(code);
   const activeLanguage = () => multiplayerLanguages.find(x=>x.code===selectedLanguage) || multiplayerLanguages[0];
@@ -31,11 +31,9 @@
   }
   function chooseMultiplayerLanguage(code) {
     const item=multiplayerLanguages.find(x=>x.code===code);if(!item)return;
-    if(queued){status('Cancel the current match search before changing the language.',true);return;}
-    selectedLanguage=code;localStorage.setItem('ut_multiplayer_language',code);
+    selectedLanguage=code;
     $('multiplayerLanguageValue').textContent=prettyLanguage(item);
-    document.querySelectorAll('.queue-language').forEach(el=>{el.textContent=item.english;});
-    closeLanguageMenu();status(`Text language set to ${item.english}.`);
+    closeLanguageMenu();status(`Room language set to ${item.english}.`);
   }
   async function loadLanguages() {
     try {
@@ -45,7 +43,6 @@
       multiplayerLanguages=data.languages.filter(l=>typeof l.code==='string'&&typeof l.english==='string'&&typeof l.native==='string');
       if(!multiplayerLanguages.some(l=>l.code===selectedLanguage))selectedLanguage='en';
       $('multiplayerLanguageValue').textContent=prettyLanguage(activeLanguage());
-      document.querySelectorAll('.queue-language').forEach(el=>{el.textContent=activeLanguage().english;});
       paintLanguageList();
     }catch(e){console.warn('Multiplayer language list unavailable:',e);paintLanguageList();}
   }
@@ -460,7 +457,7 @@
       } else status(m.message,true);
     }
     if(m.type==='lobby')drawLobby(m.rooms,m.queue);
-    if(m.type==='queued') {queued=true;$('queueIndicator').classList.remove('hidden');$('queueTitle').textContent=(queueMode==='ranked'?'⟳ searching ranked':'⟳ searching unranked')+` · ${multiplayerLanguages.find(l=>l.code===(m.language||selectedLanguage))?.english||'English'}…`; status(queueMode==='ranked'?'Finding an opponent with similar Elo…':'Finding an unranked opponent…');}
+    if(m.type==='queued') {queued=true;$('queueIndicator').classList.remove('hidden');$('queueTitle').textContent=(queueMode==='ranked'?'⟳ searching ranked':'⟳ searching unranked')+` · ${multiplayerLanguages.find(l=>l.code===(m.language||'en'))?.english||'English'}…`; status(queueMode==='ranked'?'Finding an opponent with similar Elo…':'Finding an unranked opponent…');}
     if(m.type==='queueCancelled') {queued=false;$('queueIndicator').classList.add('hidden');status('Match search cancelled.');}
     if(m.type==='matchFound') {queued=false;$('queueIndicator').classList.add('hidden');status('Match found! Starting automatically…');}
     if(m.type==='room') {
@@ -517,8 +514,8 @@
   $('createRoom').onclick=()=>send({type:'create',visibility:$('roomVisibility').value,wordCount:Number($('onlineDuration').value),language:selectedLanguage});
   $('joinRoom').onclick=()=>{const code=$('joinCode').value.trim().toUpperCase();if(code)send({type:'join',code});else status('Enter your room code first.',true);};
   $('joinCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('joinRoom').click();});
-  $('rankedQueue').onclick=()=>{if(queued)return;queueMode='ranked';send({type:'queue',mode:'ranked',language:selectedLanguage});};
-  $('unrankedQueue').onclick=()=>{if(queued)return;queueMode='unranked';send({type:'queue',mode:'unranked',language:selectedLanguage});};
+  $('rankedQueue').onclick=()=>{if(queued)return;queueMode='ranked';send({type:'queue',mode:'ranked',language:'en'});};
+  $('unrankedQueue').onclick=()=>{if(queued)return;queueMode='unranked';send({type:'queue',mode:'unranked',language:'en'});};
   $('cancelQueue').onclick=()=>send({type:'cancelQueue'});
   $('leaveRoom').onclick=()=>{send({type:'leave'});showLobby();};
   $('copyInvite').onclick=async()=>{

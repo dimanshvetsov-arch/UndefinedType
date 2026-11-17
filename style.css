@@ -396,3 +396,11 @@ footer{border-top:1px solid rgba(255,255,255,.05)}
 #roomLanguage{font-size:12px;color:#bdc2cb;margin:2px 0 9px}
 .race-shared-text[dir=rtl]{direction:rtl;text-align:right;unicode-bidi:plaintext}
 @media(max-width:780px){.multi-language-panel{flex-direction:column;align-items:stretch;gap:14px}.multi-language-control{width:100%}.multi-language-popup{left:0;right:auto}}
+
+/* v1.9.1: Text Language belongs to Create Room, not global matchmaking. */
+.room-studio .multi-language-panel{margin:23px 0 0;padding:18px 0 4px;background:none;border:0;border-top:1px solid #373b41;border-radius:0;z-index:10}
+.room-studio .multi-language-copy h3{font-size:17px}
+.room-studio .multi-language-control{min-width:230px}
+.room-studio #multiplayerLanguageButton{min-width:230px}
+.room-studio .multi-language-popup{z-index:100}
+@media(max-width:780px){.room-studio .multi-language-panel{align-items:stretch;padding-top:18px;gap:13px}.room-studio .multi-language-control{width:100%;min-width:0}.room-studio #multiplayerLanguageButton{min-width:0}}

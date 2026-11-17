@@ -1,4 +1,4 @@
-# UndefinedType v1.9 — multiplayer update
+# UndefinedType v1.9.1 — multiplayer update
 
 ## What's improved
 
@@ -30,10 +30,13 @@ For permanent accounts and Elo, configure `DATABASE_URL` (PostgreSQL) and a stab
 
 Actual multiplayer requires a running Node.js server and WebSockets; opening `index.html` alone only allows solo typing. Browser sound effects may be blocked or muted by device/browser settings. This is a beta: test with two devices on your Render URL after deployment.
 
-## New in v1.9 — multiplayer text language
-- Choose **Text Language** above the multiplayer mode cards. Search by English or native language name. The selector supports all 70 starter word banks already available in the solo typing mode.
-- Selected language applies to Ranked 1v1, Unranked 1v1, and newly created Open/Private rooms. Ranked and unranked queues match players who selected the **same language**.
-- Open-room listings display the host's language. Invite links join the existing room and always use the host's language; guests must sign in first.
-- Both players receive one identical passage, generated **on the server** from the selected word bank. Language selection does not alter Elo rules, the 5-second start countdown, or the untimed race.
-- Some languages use small starter lists; they are not complete dictionaries.
-- To update an existing Render website, commit all extracted files (including `server/languages.json`) to your current GitHub repository. Keep the existing Render service and URL.
+## Fixed in v1.9.1 — language belongs to Create Room
+
+- Text Language now appears **inside Create your room**, alongside Private/Open and the word count.
+- The default selection is **English** each time the website opens. The host can choose another language before creating a room.
+- Ranked and Unranked use **English**; changing the custom room language does not affect those queues.
+- Invitees and open-room joiners use the language chosen by the room creator; they do not have to select it themselves.
+- The original site link stays the same when this update is committed to GitHub and deployed on Render.
+
+### Updating your existing website
+Extract the ZIP and upload its contents to your **existing GitHub repository's root**. Replace old files and commit; Render will redeploy the same site.
