@@ -80,7 +80,35 @@ with sync_playwright() as p:
     inp.press('Backspace')
     assert inp.input_value()=='alxha b', 'wrong character must be correctable'
     inp.press('Backspace')
-    assert inp.input_value()=='alxha b', 'wrong prior word incorrectly unlocked'
+    assert inp.input_value()=='alxha ', 'active word should remain editable after fixing its wrong letter'
+    inp.press('Backspace')
+    assert inp.input_value()=='alxha ', 'a previous word should remain locked after the next word was started'
+    # Fresh typo in the middle of a word: Backspace must not get stuck when
+    # the remaining letters happen to match a correct *partial* prefix.
+    page.evaluate('(text)=>window.__ws.deliver({type:"countdown",text,startAt:Date.now()+5000,serverTime:Date.now(),duration:0})',text)
+    page.evaluate('window.__ws.deliver({type:"start",startAt:Date.now()})')
+    inp.fill('alx')
+    inp.press('Backspace')
+    assert inp.input_value()=='al', 'wrong letter should erase'
+    inp.press('Backspace')
+    assert inp.input_value()=='a', 'cannot erase another letter of the same correction'
+    inp.press('Backspace')
+    assert inp.input_value()=='', 'cannot finish erasing a misspelled word'
+    # Caret cannot jump into the middle of the hidden race input.
+    inp.fill('alp')
+    inp.evaluate('(el)=>el.setSelectionRange(1,1)')
+    inp.press('Backspace')
+    assert inp.input_value()=='alp', 'correct prefix should not be edited from the middle'
+    assert inp.evaluate('(el)=>el.selectionStart===el.value.length'), 'caret should be restored to the end'
+    # Solo should support the same correction window.
+    page.click('[data-page="test"]');page.evaluate('reset()')
+    source=page.evaluate('source')
+    page.locator('#typeInput').focus()
+    wrong=('x' if source[2]!='x' else 'y')
+    page.keyboard.type(source[:2]+wrong)
+    assert page.evaluate('typed')==source[:2]+wrong
+    page.keyboard.press('Backspace');page.keyboard.press('Backspace')
+    assert page.evaluate('typed')==source[:1], 'solo should not get stuck on a correct partial prefix during correction'
     assert not errors, errors
-    print('PASS: solo and multiplayer correct-word lock, wrong-word correction before space, next-word locking; no browser errors')
+    print('PASS: correcting full wrong words, backspace through corrected prefixes, cursor at end, earlier words locked; no browser errors')
     browser.close()

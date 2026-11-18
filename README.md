@@ -1,15 +1,23 @@
-# UndefinedType v2.1 — global rankings, accounts, mobile and settings
+# UndefinedType v2.2 — reliable Backspace and word correction
 
 This is an update to the **existing** UndefinedType Node.js multiplayer website. Upload the **contents** of this ZIP to the root of the **same** GitHub repository and let the **same** Render Blueprint sync. The website URL does not need to change.
 
-## Changes
+## v2.2: Backspace fix
+
+- Fixed Backspace getting stuck in a misspelled word after erasing one wrong letter. The active word stays editable during correction, even when part of the word temporarily matches the reference.
+- **Correct completed words remain locked**, and entering the next word locks the earlier word, as before.
+- Fixed multiplayer input caret placement so an invisible textarea cannot accidentally delete letters in the middle while the player is typing at the end.
+- Hardware Backspace and phone keyboard deletion now use the same guarded correction rule. This allows correcting mistakes on phones too (an update to v2.1's phone restriction), while still blocking changes to locked words.
+- Backend enforcement uses the same correction state as the browser, preventing the server from rejecting valid corrections.
+
+## Previous v2.1 changes
 
 - **Elo:** Ranked wins increase Elo and ranked losses decrease it. The Elo K-factor shrinks as rating rises: below 1100 = 34; 1100–1399 = 28; 1400–1799 = 22; 1800–2199 = 16; 2200+ = 12. The opponent's rating and expected win chance also affect the amount. Unranked and private/open rooms never change Elo.
 - **Global leaderboard:** The Leaderboards tab now displays online account Elo rankings from the server/database, not solo records stored in one browser. Refreshes when opened and periodically while viewing.
 - **Login and sign-up in Settings:** Accounts can be created, logged into and logged out of on the Settings tab (and from the existing welcome screen). Login messages distinguish wrong password from an account that cannot be found. Login uses passwords hashed with scrypt, signed sessions, and PostgreSQL when configured.
 - **Storage status:** The website clearly warns when a database is not connected. Without PostgreSQL, accounts and Elo on Render can disappear after a deployment or restart. With the database, they survive web deployments (subject to the database service itself remaining available).
 - **Settings:** Removed Require Corrections and Typing Sounds controls. Kept color and reset controls; the accent and background color selectors appear as white circles around the selected color.
-- **Mobile:** Typing Backspace/correction is blocked on touch phones (both solo and multiplayer). The restart button generates a new text. The restart icon spins once and returns to its original angle automatically. Desktop retains word-correction behavior.
+- **Mobile (v2.1):** Previously blocked all corrections on touch phones. **Superseded by v2.2**: mistakes can now be erased, but correctly completed words stay locked. The restart button generates a new text. The restart icon spins once and returns to its original angle automatically. Desktop retains word-correction behavior.
 - **Race results:** The first player to finish sees a preliminary leaderboard **immediately**, while the other player continues typing. Final Elo is awarded when the match ends. Time is always a number (including a player who leaves), never “DNF”. A finish-order counter prevents tied timestamps from unfairly changing who finished first.
 - Existing languages, room invites, ranked/unranked modes and 5-second countdown remain.
 

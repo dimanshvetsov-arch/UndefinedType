@@ -31,7 +31,7 @@ const eloK = rating => rating >= 2200 ? 12 : rating >= 1800 ? 16 : rating >= 140
 const eloChange = (rating, opponentRating, outcome) => Math.round(eloK(rating)*(outcome - 1/(1+10**((opponentRating-rating)/400))));
 const usernameKey = str => String(str || '').trim().toLowerCase();
 const passwordHash = (password, salt) => crypto.scryptSync(password, salt, 64).toString('hex');
-const newPlayer = ws => ({ws, id:ws.id, user:ws.user, typed:'', position:0, correct:0, errors:0, strokes:0,missStrokes:0,lockedBefore:0,progress:0, wpm:0, accuracy:100,finishedAt:0,finishOrder:0});
+const newPlayer = ws => ({ws, id:ws.id, user:ws.user, typed:'', position:0, correct:0, errors:0, strokes:0,missStrokes:0,lockedBefore:0,correctionStart:null,progress:0, wpm:0, accuracy:100,finishedAt:0,finishOrder:0});
 const uniqueCode = () => {let id; do {id=crypto.randomBytes(4).toString('hex').toUpperCase();} while(rooms.has(id)); return id;};
 
 // Signed tokens survive app restarts when SESSION_SECRET is stable. Do not send the secret to browsers.
@@ -122,7 +122,7 @@ function leave(ws) {
     if(r.status==='countdown') {
       clearTimeout(r.timer);
       r.status='waiting';r.startAt=0;r.text='';
-      for(const p of r.players) Object.assign(p,{typed:'',position:0,correct:0,errors:0,strokes:0,missStrokes:0,lockedBefore:0,progress:0,wpm:0,accuracy:100,finishedAt:0,finishOrder:0});
+      for(const p of r.players) Object.assign(p,{typed:'',position:0,correct:0,errors:0,strokes:0,missStrokes:0,lockedBefore:0,correctionStart:null,progress:0,wpm:0,accuracy:100,finishedAt:0,finishOrder:0});
       broadcast(r,{type:'countdownCancelled',message:'Player left. Waiting for another opponent.'});
     }
   }
@@ -203,14 +203,18 @@ function checkQueue() {
     lobby();return;
   }
 }
-// One-step correction rule shared conceptually with the browser:
-// correctly typed words cannot be erased, and beginning a new word locks
-// every earlier word, including incorrectly typed ones.
-function canEraseRacerWord(value, reference, floor){
+// Keep error-correction permission for the active word until it is fixed.
+// Otherwise Backspace can get stuck when deleting the last wrong letter
+// leaves a valid partial prefix (for example deleting 'x' from 'alx').
+function racerWordStart(value){
+  const end=value.endsWith(' ')?value.length-1:value.length;
+  return value.lastIndexOf(' ',end-1)+1;
+}
+function canEraseRacerWord(value,reference,floor,correctionStart=null){
   if(!value||value.length-1<floor)return false;
   const end=value.endsWith(' ')?value.length-1:value.length;
-  const start=value.lastIndexOf(' ',end-1)+1;
-  return value.slice(start,end)!==reference.slice(start,end);
+  const start=racerWordStart(value);
+  return value.slice(start,end)!==reference.slice(start,end)||correctionStart===start;
 }
 function acceptInput(ws, raw) {
   const r=rooms.get(ws.room);
@@ -224,10 +228,16 @@ function acceptInput(ws, raw) {
   if(raw===p.typed) return;
   const before=p.typed;
   if(raw===before.slice(0,-1)){
-    if(!canEraseRacerWord(before,r.text,p.lockedBefore))return;
+    if(!canEraseRacerWord(before,r.text,p.lockedBefore,p.correctionStart))return;
+    if(!raw||raw.endsWith(' '))p.correctionStart=null;
   }else if(raw.startsWith(before)&&raw.length>before.length){
     for(let i=before.length;i<raw.length;i++){
-      if(i>0&&raw[i-1]===' ')p.lockedBefore=i;
+      if(i>0&&raw[i-1]===' '){p.lockedBefore=i;p.correctionStart=null;}
+      if(raw[i]!==r.text[i])p.correctionStart=raw.slice(0,i).lastIndexOf(' ')+1;
+      const partial=raw.slice(0,i+1);
+      const end=partial.endsWith(' ')?partial.length-1:partial.length;
+      const start=racerWordStart(partial);
+      if((r.text[partial.length]===' '||partial.length===r.text.length)&&partial.slice(start,end)===r.text.slice(start,end))p.correctionStart=null;
     }
   }else return;
   let prefix=before.length;

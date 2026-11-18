@@ -54,18 +54,20 @@ async def main():
   assert before!=after, 'Phone restart must generate new text'
   assert await phone.evaluate('window.matchMedia("(pointer: coarse)").matches')
   input=phone.locator('#typeInput')
-  await input.focus();await phone.keyboard.type('abc')
+  await input.focus()
+  expected=await phone.evaluate('source')
+  wrong='x' if expected[0]!='x' else 'y'
+  await phone.keyboard.type(wrong)
   n1=await phone.locator('#wordsDisplay .char.correct, #wordsDisplay .char.incorrect').count()
-  # Disallow backspace / mobile beforeinput deletion
   await phone.keyboard.press('Backspace')
   n2=await phone.locator('#wordsDisplay .char.correct, #wordsDisplay .char.incorrect').count()
-  assert n1==n2, f'Mobile Backspace should not remove letters: {n1}, {n2}'
+  assert n1==1 and n2==0, f'Mobile Backspace should remove wrong letters: {n1}, {n2}'
   await phone.wait_for_timeout(700)
   assert not await phone.locator('#restart').evaluate('(el)=>el.classList.contains("restart-animate")')
   await phone.locator('button[data-page="settings"]').click()
   assert await phone.locator('.color-ring').count()==2
   await phone.screenshot(path='/mnt/data/UndefinedType-v2.1-mobile.png',full_page=True)
-  print('MOBILE: restart new text, no correction and color circles passed')
+  print('MOBILE: restart new text, erase wrong letters and color circles passed')
   print('MOBILE_PAGE_ERRORS',phone_errors)
   assert not phone_errors
   await browser.close()

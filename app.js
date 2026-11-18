@@ -107,7 +107,7 @@ function updateLanguageStatus(){
 
 const lastQuote={};
 const lengths={time:[15,30,60,120],words:[10,25,50,100],quote:['short','medium','long'],zen:['endless'],custom:['custom']};
-const settings=JSON.parse(localStorage.getItem('undefinedtype-settings')||'{}');let mode='time',length=30,lang='en',punctuation=false,numbers=false,source='',typed='',startedAt=0,finished=false,started=false,timerId=null,history=[],events=[],audio=null,session=0,focusRequested=false,lockedBefore=0;
+const settings=JSON.parse(localStorage.getItem('undefinedtype-settings')||'{}');let mode='time',length=30,lang='en',punctuation=false,numbers=false,source='',typed='',startedAt=0,finished=false,started=false,timerId=null,history=[],events=[],audio=null,session=0,focusRequested=false,lockedBefore=0,correctionWordStart=null;
 const saveSettings=()=>localStorage.setItem('undefinedtype-settings',JSON.stringify(settings));
 const undefinedtypeIsPhone=()=>window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 900px)').matches;
 function randWord(){const a=getBank(lang).split(/\s+/).filter(Boolean);return a.length?a[Math.floor(Math.random()*a.length)]:'';}
@@ -260,7 +260,7 @@ function countWords(text){
 }
 function reset(){
  updateLanguageStatus();session++;clearInterval(timerId);
- const oldText=source;source=makeText();if(oldText&&mode!=='custom'&&mode!=='zen'){for(let n=0;n<4 && source===oldText;n++)source=makeText();}typed='';lockedBefore=0;startedAt=0;started=false;finished=false;history=[];events=[];
+ const oldText=source;source=makeText();if(oldText&&mode!=='custom'&&mode!=='zen'){for(let n=0;n<4 && source===oldText;n++)source=makeText();}typed='';lockedBefore=0;correctionWordStart=null;startedAt=0;started=false;finished=false;history=[];events=[];
  $('#typingStage').classList.remove('hidden');$('#results').classList.add('hidden');
  $('#timer').textContent=mode==='time'?String(length):'0';
  $('#zenInput').value='';$('#zenWords').textContent='0';
@@ -298,23 +298,43 @@ function setCapsState(e){
  const caps=!!(e.getModifierState?.('CapsLock'));
  $('#capsNotice').classList.toggle('hidden',!caps||!$('#test').classList.contains('active'));
 }
-// A correct word is locked. An incorrect word may be erased only until
-// the first letter of the following word has been entered.
-function mayEraseWord(value, expected, floor=0){
+// A *completed* correct word is locked. Once a mistake is made within a
+// word, keep its correction window open even when erasing the wrong character
+// temporarily leaves a correct prefix. Starting the next word locks the last.
+function currentWordStart(value){
+ const end=value.endsWith(' ')?value.length-1:value.length;
+ return value.lastIndexOf(' ',end-1)+1;
+}
+function mayEraseWord(value, expected, floor=0, correctionStart=null){
  if(!value || value.length-1<floor)return false;
- const endedWithSpace=value.endsWith(' ');
- const end=endedWithSpace?value.length-1:value.length;
- const start=value.lastIndexOf(' ',end-1)+1;
- return value.slice(start,end)!==expected.slice(start,end);
+ const end=value.endsWith(' ')?value.length-1:value.length;
+ const start=currentWordStart(value);
+ return value.slice(start,end)!==expected.slice(start,end) || correctionStart===start;
+}
+function eraseSoloLetter(){
+ if(!mayEraseWord(typed,source,lockedBefore,correctionWordStart))return false;
+ typed=typed.slice(0,-1);
+ if(!typed||typed.endsWith(' '))correctionWordStart=null;
+ events.push({type:'backspace'});
+ paintCharacter(typed.length);moveCursor();updateStats();
+ return true;
 }
 function pushText(text){
  if(!source||finished||mode==='zen')return;
  if(!started)begin();
  for(const ch of Array.from(text)){
   extendInfiniteText();if(typed.length>=source.length)break;
-  
-  if(typed.endsWith(' '))lockedBefore=typed.length;
-  const expected=source[typed.length];events.push({type:'input',correct:ch===expected});typed+=ch;
+  if(typed.endsWith(' ')){lockedBefore=typed.length;correctionWordStart=null;}
+  const at=typed.length,wordStart=typed.lastIndexOf(' ')+1;
+  const expected=source[at];
+  if(ch!==expected)correctionWordStart=wordStart;
+  events.push({type:'input',correct:ch===expected});typed+=ch;
+  // A corrected *complete* word is locked; partial words are still editable
+  // when a mistake was made earlier in that word.
+  const after=source[typed.length];
+  const end=typed.endsWith(' ')?typed.length-1:typed.length;
+  const start=currentWordStart(typed);
+  if((after===' '||after===undefined)&&typed.slice(start,end)===source.slice(start,end))correctionWordStart=null;
   paintCharacter(typed.length-1);
   if(typed.length>=source.length&&mode!=='time'){moveCursor();updateStats();finish();break;}
  }
@@ -332,7 +352,7 @@ function input(e){
  if(!source)return;
  if(e.key==='Backspace'){
   e.preventDefault();
-  if(!undefinedtypeIsPhone()&&mayEraseWord(typed,source,lockedBefore)){typed=typed.slice(0,-1);events.push({type:'backspace'});paintCharacter(typed.length);moveCursor();updateStats();}
+  eraseSoloLetter();
   return;
  }
  if(e.key.length!==1)return;
@@ -342,4 +362,4 @@ function input(e){
 function showPage(name){$$('.page').forEach(p=>p.classList.toggle('active',p.id===name));$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===name));if(name==='leaderboards')window.dispatchEvent(new Event('undefinedtype:leaderboard'));if(name==='test')requestAnimationFrame(focusTyping);}
 function share(){const c=document.createElement('canvas');c.width=1100;c.height=580;const x=c.getContext('2d');x.fillStyle='#181a1b';x.fillRect(0,0,1100,580);x.fillStyle='#e2b714';x.font='bold 50px monospace';x.fillText('undefinedtype',75,100);x.fillStyle='#8a8e8f';x.font='24px monospace';x.fillText('typing test result',75,155);x.fillStyle='#e2b714';x.font='bold 130px monospace';x.fillText($('#finalWpm').textContent,75,345);x.font='28px monospace';x.fillText('WPM',85,395);x.fillStyle='#ddd';x.font='40px monospace';x.fillText($('#finalAccuracy').textContent+' accuracy',430,325);x.fillText($('#finalConsistency').textContent+' consistency',430,390);x.fillStyle='#777';x.font='20px monospace';x.fillText(`${mode} · ${length} · ${lang}`,75,500);const link=document.createElement('a');link.download='undefinedtype-result.png';link.href=c.toDataURL('image/png');link.click();}
 $$('.nav').forEach(b=>b.onclick=()=>showPage(b.dataset.page));$('#home').onclick=e=>{e.preventDefault();showPage('test');};$$('#modes button').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;length=lengths[mode][mode==='time'?1:0];customApproved=false;configure();reset();});$('#punctuation').onclick=()=>{punctuation=!punctuation;configure();reset();};$('#numbers').onclick=()=>{numbers=!numbers;configure();reset();};
-$('#applyCustom').onclick=()=>{if(!$('#customText').value.trim())return;customApproved=true;reset();};$('#customText').addEventListener('input',()=>{$('#applyCustom').disabled=!$('#customText').value.trim();$('#customCounter').textContent=Array.from($('#customText').value).length+' characters';customApproved=false;if(source||started)reset();});$('#restart').onclick=()=>{const button=$('#restart');button.classList.remove('restart-animate');void button.offsetWidth;button.classList.add('restart-animate');reset();};$('#restart').addEventListener('animationend',()=>$('#restart').classList.remove('restart-animate'));$('#finishZen').onclick=()=>{if(started&&!finished)finish();};$('#again').onclick=()=>reset();$('#share').onclick=share;$('#typingWrap').onclick=focusTyping;$('#typeInput').addEventListener('compositionstart',()=>{composing=true;});$('#typeInput').addEventListener('compositionend',e=>{composing=false;lastCommittedComposition=e.data||'';$('#typeInput').value='';pushText(lastCommittedComposition);});$('#typeInput').addEventListener('beforeinput',e=>{if(undefinedtypeIsPhone()&&String(e.inputType||'').startsWith('delete'))e.preventDefault();});$('#typeInput').addEventListener('input',e=>{if(!composing&&e.data&&!e.isComposing){if(e.data!==lastCommittedComposition){pushText(e.data);}lastCommittedComposition=null;}$('#typeInput').value='';});$('#zenInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();if(started&&!finished)finish();} });$('#zenInput').addEventListener('input',()=>{if(mode!=='zen'||finished)return;if(!started&&$('#zenInput').value.length)begin();updateStats();});document.addEventListener('keydown',input);document.addEventListener('keyup',setCapsState);window.addEventListener('blur',()=>$('#capsNotice').classList.add('hidden'));$('#accent').value=settings.accent||'#e2b714';$('#background').value=settings.background||'#181a1b';function theme(){document.documentElement.style.setProperty('--accent',$('#accent').value);document.documentElement.style.setProperty('--bg',$('#background').value);}theme();$('#accent').oninput=()=>{settings.accent=$('#accent').value;theme();saveSettings();};$('#background').oninput=()=>{settings.background=$('#background').value;theme();saveSettings();};$('#resetTheme').onclick=()=>{$('#accent').value='#e2b714';$('#background').value='#181a1b';settings.accent='#e2b714';settings.background='#181a1b';theme();saveSettings();};setupLanguages();lang='en';$('#selectedLanguage').textContent=languageDisplay('en');configure();reset();
+$('#applyCustom').onclick=()=>{if(!$('#customText').value.trim())return;customApproved=true;reset();};$('#customText').addEventListener('input',()=>{$('#applyCustom').disabled=!$('#customText').value.trim();$('#customCounter').textContent=Array.from($('#customText').value).length+' characters';customApproved=false;if(source||started)reset();});$('#restart').onclick=()=>{const button=$('#restart');button.classList.remove('restart-animate');void button.offsetWidth;button.classList.add('restart-animate');reset();};$('#restart').addEventListener('animationend',()=>$('#restart').classList.remove('restart-animate'));$('#finishZen').onclick=()=>{if(started&&!finished)finish();};$('#again').onclick=()=>reset();$('#share').onclick=share;$('#typingWrap').onclick=focusTyping;$('#typeInput').addEventListener('compositionstart',()=>{composing=true;});$('#typeInput').addEventListener('compositionend',e=>{composing=false;lastCommittedComposition=e.data||'';$('#typeInput').value='';pushText(lastCommittedComposition);});$('#typeInput').addEventListener('beforeinput',e=>{if(String(e.inputType||'').startsWith('delete')){e.preventDefault();if(!composing&&mode!=='zen'&&!finished)eraseSoloLetter();}});$('#typeInput').addEventListener('input',e=>{if(!composing&&String(e.inputType||'').startsWith('delete'))eraseSoloLetter();else if(!composing&&e.data&&!e.isComposing){if(e.data!==lastCommittedComposition){pushText(e.data);}lastCommittedComposition=null;}$('#typeInput').value='';});$('#zenInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();if(started&&!finished)finish();} });$('#zenInput').addEventListener('input',()=>{if(mode!=='zen'||finished)return;if(!started&&$('#zenInput').value.length)begin();updateStats();});document.addEventListener('keydown',input);document.addEventListener('keyup',setCapsState);window.addEventListener('blur',()=>$('#capsNotice').classList.add('hidden'));$('#accent').value=settings.accent||'#e2b714';$('#background').value=settings.background||'#181a1b';function theme(){document.documentElement.style.setProperty('--accent',$('#accent').value);document.documentElement.style.setProperty('--bg',$('#background').value);}theme();$('#accent').oninput=()=>{settings.accent=$('#accent').value;theme();saveSettings();};$('#background').oninput=()=>{settings.background=$('#background').value;theme();saveSettings();};$('#resetTheme').onclick=()=>{$('#accent').value='#e2b714';$('#background').value='#181a1b';settings.accent='#e2b714';settings.background='#181a1b';theme();saveSettings();};setupLanguages();lang='en';$('#selectedLanguage').textContent=languageDisplay('en');configure();reset();

@@ -286,3 +286,29 @@ test('status tells the visitor whether permanent storage is connected; leaderboa
   const ranking=await (await fetch(base+'/api/leaderboard')).json();assert.ok(ranking.total>=4);
   assert.ok(ranking.players.some(p=>p.username==='FinishEarly'));
 });
+
+
+test('Backspace can fully erase a misspelled active word without unlocking previous words',async()=>{
+  const auth=await Promise.all(['Alice','Bob'].map(async username=>(await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username,password:'strongPassword123'})})).json()));
+  const a=makeSocket(),b=makeSocket();a.receive({type:'auth',token:auth[0].token});b.receive({type:'auth',token:auth[1].token});
+  a.receive({type:'create',visibility:'private',wordCount:30});b.receive({type:'join',code:a.room});
+  const r=engine.rooms.get(a.room);clearTimeout(r.timer);r.timer=null;r.status='running';r.startAt=Date.now()-30000;
+  const player=r.players.find(p=>p.ws===a);
+  const space=r.text.indexOf(' '),first=r.text.slice(0,space);
+  // One wrong character in the middle. Erase it and the now-correct prefix.
+  let typo=r.text[0]+r.text[1]+(r.text[2]==='x'?'y':'x');
+  for(let i=1;i<=typo.length;i++)a.receive({type:'input',value:typo.slice(0,i)});
+  for(let i=typo.length-1;i>=0;i--){a.receive({type:'input',value:typo.slice(0,i)});assert.equal(player.typed,typo.slice(0,i),'should erase every character of a word that contained a typo');}
+  // Correct completed words should remain protected.
+  a.receive({type:'input',value:first});a.receive({type:'input',value:first.slice(0,-1)});
+  assert.equal(player.typed,first);
+  a.receive({type:'input',value:first+' '});
+  // Wrong letter immediately after a space and correction to empty word.
+  const bad=r.text[space+1]==='x'?'y':'x';
+  a.receive({type:'input',value:first+' '+bad});
+  a.receive({type:'input',value:first+' '});
+  assert.equal(player.typed,first+' ');
+  a.receive({type:'input',value:first});
+  assert.equal(player.typed,first+' ','previous completed correct word must stay locked');
+  a.receive({type:'leave'});b.receive({type:'leave'});a.close();b.close();
+});

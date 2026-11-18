@@ -338,7 +338,7 @@
   function prepareRace(m) {
     matchText=m.text;startAt=m.startAt;duration=m.duration;
     clockOffset=Date.now()-(m.serverTime||Date.now());
-    phase='countdown';typingValue='';typingLock=0;otherPainted=0;ownPainted='';youPosition=0;opponentPosition=0;
+    phase='countdown';typingValue='';typingLock=0;correctionStart=null;otherPainted=0;ownPainted='';youPosition=0;opponentPosition=0;
     positions={};finishedMine=false;$('raceFinishNotice').classList.add('hidden');
     $('raceTimeLabel').textContent='starts in';$('raceLiveWpm').textContent='0';$('raceLiveAccuracy').textContent='100%';
     $('racePassageLength').textContent=`${matchText.trim().split(/\s+/).length} words · ${multiplayerLanguages.find(l=>l.code===m.language)?.english||m.language||'English'}`;
@@ -391,22 +391,40 @@
     const value=typingValue+(next==='\n'?'\n':' ');
     if(commitRaceInput(value))$('raceInput').value=value;
   });
-  // Correct words are permanent. Wrong words can be fixed, but only before
-  // a letter is typed in the next word.
-  let typingLock=0;
+  // Wrong words stay editable through their last space, but once the next
+  // word starts the previous word cannot be changed. Correct words lock.
+  let typingLock=0, correctionStart=null;
+  function wordStart(value){
+    const end=value.endsWith(' ')?value.length-1:value.length;
+    return value.lastIndexOf(' ',end-1)+1;
+  }
   function mayEraseRaceWord(value){
     if(!value||value.length-1<typingLock)return false;
     const end=value.endsWith(' ')?value.length-1:value.length;
-    const start=value.lastIndexOf(' ',end-1)+1;
-    return value.slice(start,end)!==matchText.slice(start,end);
+    const start=wordStart(value);
+    return value.slice(start,end)!==matchText.slice(start,end)||correctionStart===start;
+  }
+  function syncRaceField(){
+    const field=$('raceInput');field.value=typingValue;
+    try{field.setSelectionRange(field.value.length,field.value.length);}catch{}
   }
   function commitRaceInput(next){
     if(next===typingValue)return false;
     if(next===typingValue.slice(0,-1)){
-      if((window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 900px)').matches)||!mayEraseRaceWord(typingValue))return false;
+      if(!mayEraseRaceWord(typingValue))return false;
+      // A correction stays unlocked until the active word is fixed or empty.
+      if(!next||next.endsWith(' '))correctionStart=null;
     }else if(next.startsWith(typingValue)&&next.length<=matchText.length){
       for(let i=typingValue.length;i<next.length;i++){
-        if(i>0&&next[i-1]===' ')typingLock=i;
+        if(i>0&&next[i-1]===' '){typingLock=i;correctionStart=null;}
+        if(next[i]!==matchText[i]){
+          const prefix=next.slice(0,i);
+          correctionStart=prefix.lastIndexOf(' ')+1;
+        }
+        const partial=next.slice(0,i+1);
+        const end=partial.endsWith(' ')?partial.length-1:partial.length;
+        const start=wordStart(partial);
+        if((matchText[partial.length]===' '||partial.length===matchText.length)&&partial.slice(start,end)===matchText.slice(start,end))correctionStart=null;
       }
     }else return false;
     showOwnText(next);playKeySound();send({type:'input',value:next});
@@ -414,12 +432,27 @@
   }
   function processRaceInput(){
     if(composingRaceText)return;
-    if(phase!=='running'||finishedMine) {$('raceInput').value=typingValue;return;}
+    if(phase!=='running'||finishedMine) {syncRaceField();return;}
     const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
-    if(!commitRaceInput(val))$('raceInput').value=typingValue;
-    else $('raceInput').value=val;
+    commitRaceInput(val);
+    syncRaceField();
   }
-  $('raceInput').addEventListener('beforeinput',e=>{if(window.matchMedia('(pointer: coarse)').matches&&window.matchMedia('(max-width: 900px)').matches&&String(e.inputType||'').startsWith('delete'))e.preventDefault();});
+  // Desktop Backspace and virtual-keyboard deletion use the exact same
+  // controlled operation; the native textarea caret cannot get stuck midway.
+  $('raceInput').addEventListener('beforeinput',e=>{
+    if(!String(e.inputType||'').startsWith('delete'))return;
+    e.preventDefault();
+    if(phase==='running'&&!finishedMine)commitRaceInput(typingValue.slice(0,-1));
+    syncRaceField();
+  });
+  $('raceInput').addEventListener('keydown',e=>{
+    if(e.key==='Backspace'&&!e.isComposing&&!composingRaceText){
+      e.preventDefault();
+      if(phase==='running'&&!finishedMine)commitRaceInput(typingValue.slice(0,-1));
+      syncRaceField();
+    }
+  });
+  $('raceInput').addEventListener('mouseup',syncRaceField);
   $('raceInput').addEventListener('input',processRaceInput);
   function playKeySound(){
     try{audioContext=audioContext||new(window.AudioContext||window.webkitAudioContext)();

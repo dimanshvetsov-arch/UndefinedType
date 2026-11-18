@@ -74,7 +74,8 @@ with sync_playwright() as p:
  page.locator('#raceInput').fill('the xuick')
  assert page.locator('#raceSharedText .race-word-error').count()==1,'whole-word error underline missing'
  assert page.locator('#raceSharedText .race-error').count()==1
- page.locator('#raceInput').fill('the quick')
+ for _ in range(len('xuick')): page.locator('#raceInput').press('Backspace')
+ page.locator('#raceInput').type('quick')
  assert page.locator('#raceSharedText .race-word-error').count()==0,'word underline must clear after correction'
  assert page.locator('#raceSharedText .race-correct').count()==len('the quick')
  page.locator('#raceInput').press('Enter')
