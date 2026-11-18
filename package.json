@@ -1,6 +1,6 @@
 {
   "name": "undefinedtype",
-  "version": "1.9.1",
+  "version": "2.1.0",
   "private": true,
   "description": "UndefinedType typing speed tests and real-time multiplayer",
   "scripts": {

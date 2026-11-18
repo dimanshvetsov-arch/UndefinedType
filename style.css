@@ -404,3 +404,30 @@ footer{border-top:1px solid rgba(255,255,255,.05)}
 .room-studio #multiplayerLanguageButton{min-width:230px}
 .room-studio .multi-language-popup{z-index:100}
 @media(max-width:780px){.room-studio .multi-language-panel{align-items:stretch;padding-top:18px;gap:13px}.room-studio .multi-language-control{width:100%;min-width:0}.room-studio #multiplayerLanguageButton{min-width:0}}
+
+/* v2.1 - account/settings, global rankings and mobile restart polish */
+.global-leaderboard{max-width:900px}
+.ranking-row{display:grid;grid-template-columns:50px minmax(110px,1fr) 120px 180px;gap:10px;align-items:center;padding:14px 10px;border-bottom:1px solid #393b3c;font-size:13px}
+.ranking-row .leaderboard-position{color:var(--accent);font-weight:bold}
+.ranking-row .leaderboard-elo{color:var(--accent);font-weight:bold;text-align:right}
+.ranking-row small{text-align:right;color:var(--muted)}
+.settings-account{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;max-width:420px}
+.settings-account input{background:var(--panel);border:1px solid #4b4e50;border-radius:8px;color:var(--text);min-height:40px;padding:8px 10px;width:150px;font:inherit;font-size:12px}
+.settings-account-actions{display:flex;gap:6px}
+.settings-account button{border:1px solid #494b4f;border-radius:8px;background:var(--panel);padding:9px 13px}
+.settings-account #settingsRegister{color:var(--accent)}
+#settingsAuthError{color:#ec7180;width:100%;text-align:right;font-size:11px}
+.color-ring{width:48px;height:48px;border-radius:50%;border:4px solid #fff;overflow:hidden;display:block;flex:0 0 48px;cursor:pointer;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.setting .color-ring input[type=color]{display:block;width:100%;height:100%;padding:0;margin:0;border:0;background:transparent;border-radius:50%;cursor:pointer;appearance:none;-webkit-appearance:none}
+.color-ring input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.color-ring input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
+.color-ring input[type=color]::-moz-color-swatch{border:0;border-radius:50%}
+.restart{transition:background .15s ease,color .15s ease;transform:none!important}
+.restart.restart-animate{animation:utRestart .48s cubic-bezier(.2,.8,.25,1) both}
+@keyframes utRestart{0%{rotate:0deg}65%{rotate:325deg}100%{rotate:360deg}}
+.storage-notice{font-size:11px;color:#b6a5db;margin:9px 0}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+#raceResult .match-scoreboard{margin-top:20px}
+#raceResult .match-score-table{min-width:760px}
+@media(max-width:700px){.setting{align-items:flex-start}.settings-account{width:100%;justify-content:flex-start}.settings-account input{width:100%}.settings-account-actions{width:100%}.settings-account-actions button{flex:1}.ranking-row{grid-template-columns:42px 1fr 90px;gap:6px}.ranking-row small{grid-column:2/4;text-align:left}.ranking-row .leaderboard-elo{text-align:right}.restart{touch-action:manipulation}}
+@media(prefers-reduced-motion:reduce){.restart.restart-animate{animation:none}}

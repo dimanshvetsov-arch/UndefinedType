@@ -114,6 +114,8 @@
     $('multiplayerContent').classList.toggle('hidden', !user);
     $('accountState').textContent = user ? `signed in as ${user.username} · ${user.elo} Elo` : '';
     $('welcomeGate').classList.toggle('hidden', !!user || sessionStorage.getItem('ut_guest_chosen') === '1');
+    $('settingsSignedOut').classList.toggle('hidden',Boolean(user));$('settingsSignedIn').classList.toggle('hidden',!user);
+    $('settingsAccountState').textContent=user?`Signed in as ${user.username} · ${user.elo} Elo`:'Sign up or log in to save your rank and play multiplayer.';
     updateInviteNotice();
   }
   function showLobby() {
@@ -138,9 +140,10 @@
     updateProfile();
   }
   async function authenticate(action, welcome=false) {
-    const nameField=$(welcome?'welcomeUsername':'authUsername');
-    const passField=$(welcome?'welcomePassword':'authPassword');
-    const error=$(welcome?'welcomeError':'authError');
+    const fromSettings=welcome==='settings';
+    const nameField=$(fromSettings?'settingsUsername':welcome?'welcomeUsername':'authUsername');
+    const passField=$(fromSettings?'settingsPassword':welcome?'welcomePassword':'authPassword');
+    const error=$(fromSettings?'settingsAuthError':welcome?'welcomeError':'authError');
     error.textContent='';
     const username=nameField.value.trim(), password=passField.value;
     if (!username || !password) {error.textContent='Enter your username and password.';return;}
@@ -163,12 +166,15 @@
   $('registerAccount').onclick=()=>authenticate('register');
   $('loginAccount').onclick=()=>authenticate('login');
   $('guestChoice').onclick=()=>document.querySelector('[data-page="test"]').click();
-  $('logoutAccount').onclick=()=>{
+  $('settingsRegister').onclick=()=>authenticate('register','settings');
+  $('settingsLogin').onclick=()=>authenticate('login','settings');
+  const logout=()=>{
     send({type:'unauth'});
     token='';user=null;queued=false;
     localStorage.removeItem('ut_token');sessionStorage.setItem('ut_guest_chosen','1');
     updateProfile();showLobby();status('Logged out · solo typing remains available');
   };
+  $('logoutAccount').onclick=logout;$('settingsLogout').onclick=logout;
   document.querySelectorAll('.online-controls input[type="password"]').forEach(input => {
     input.addEventListener('keydown',e=>{if(e.key==='Enter'){
       if(input.id==='welcomePassword')$('welcomeLogin').click();else $('loginAccount').click();
@@ -332,7 +338,7 @@
   function prepareRace(m) {
     matchText=m.text;startAt=m.startAt;duration=m.duration;
     clockOffset=Date.now()-(m.serverTime||Date.now());
-    phase='countdown';typingValue='';otherPainted=0;ownPainted='';youPosition=0;opponentPosition=0;
+    phase='countdown';typingValue='';typingLock=0;otherPainted=0;ownPainted='';youPosition=0;opponentPosition=0;
     positions={};finishedMine=false;$('raceFinishNotice').classList.add('hidden');
     $('raceTimeLabel').textContent='starts in';$('raceLiveWpm').textContent='0';$('raceLiveAccuracy').textContent='100%';
     $('racePassageLength').textContent=`${matchText.trim().split(/\s+/).length} words · ${multiplayerLanguages.find(l=>l.code===m.language)?.english||m.language||'English'}`;
@@ -383,18 +389,37 @@
     const next=matchText[typingValue.length];
     if(next!==' '&&next!=='\n')return;
     const value=typingValue+(next==='\n'?'\n':' ');
-    $('raceInput').value=value;
-    showOwnText(value);playKeySound();
-    send({type:'input',value});
+    if(commitRaceInput(value))$('raceInput').value=value;
   });
+  // Correct words are permanent. Wrong words can be fixed, but only before
+  // a letter is typed in the next word.
+  let typingLock=0;
+  function mayEraseRaceWord(value){
+    if(!value||value.length-1<typingLock)return false;
+    const end=value.endsWith(' ')?value.length-1:value.length;
+    const start=value.lastIndexOf(' ',end-1)+1;
+    return value.slice(start,end)!==matchText.slice(start,end);
+  }
+  function commitRaceInput(next){
+    if(next===typingValue)return false;
+    if(next===typingValue.slice(0,-1)){
+      if((window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 900px)').matches)||!mayEraseRaceWord(typingValue))return false;
+    }else if(next.startsWith(typingValue)&&next.length<=matchText.length){
+      for(let i=typingValue.length;i<next.length;i++){
+        if(i>0&&next[i-1]===' ')typingLock=i;
+      }
+    }else return false;
+    showOwnText(next);playKeySound();send({type:'input',value:next});
+    return true;
+  }
   function processRaceInput(){
     if(composingRaceText)return;
     if(phase!=='running'||finishedMine) {$('raceInput').value=typingValue;return;}
     const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
-    if(val!==$('raceInput').value)$('raceInput').value=val;
-    showOwnText(val);playKeySound();
-    send({type:'input',value:val});
+    if(!commitRaceInput(val))$('raceInput').value=typingValue;
+    else $('raceInput').value=val;
   }
+  $('raceInput').addEventListener('beforeinput',e=>{if(window.matchMedia('(pointer: coarse)').matches&&window.matchMedia('(max-width: 900px)').matches&&String(e.inputType||'').startsWith('delete'))e.preventDefault();});
   $('raceInput').addEventListener('input',processRaceInput);
   function playKeySound(){
     try{audioContext=audioContext||new(window.AudioContext||window.webkitAudioContext)();
@@ -406,41 +431,32 @@
       o.connect(g);g.connect(audioContext.destination);o.start();o.stop(audioContext.currentTime+.03);
     }catch{}
   }
-  function showFinished(m) {
-    phase='finished';clearInterval(countdownTimer);
-    $('raceInput').disabled=true;$('raceInput').blur();
-    $('raceCountdown').classList.remove('countdown-active');
-    $('raceCountdown').textContent='finished';$('raceTimeLabel').textContent='race';
-    const winner=m.players.find(p=>p.id===m.winnerId);
-    const mine=m.players.find(p=>p.id===me);
+  function renderScoreboard(m, provisional=false){
     const box=$('raceResult');box.replaceChildren();
-    const heading=document.createElement('h2');heading.textContent=!winner?'Draw!':winner.id===me?'You won!':`${winner.name} won!`;
+    const winner=m.players.find(p=>p.id===m.winnerId);
+    const heading=document.createElement('h2');
+    heading.textContent=provisional?'You finished!':!winner?'Draw!':winner.id===me?'You won!':`${winner.name} won!`;
     const details=document.createElement('p');
-    details.textContent=`${m.reason==='forfeit'?'A player left the race.':'Both players completed the text.'} ${m.ratings?.[me]?'Ranked Elo updated.':'No Elo changes in this mode.'}`;
+    details.textContent=provisional?'Your result is ready. The opponent can keep typing. Ranked Elo is calculated after the match ends.':
+      `${m.reason==='forfeit'?'A player left the race.':'Match completed.'} ${m.ratings?.[me]?'Ranked Elo updated.':'No Elo changes in this mode.'}`;
     box.append(heading,details);
     const board=document.createElement('div');board.className='match-scoreboard';
     const table=document.createElement('table');table.className='match-score-table';
-    const head=document.createElement('thead');head.innerHTML='<tr><th>place / player</th><th>wpm</th><th>raw</th><th>accuracy</th><th>mistakes</th><th>time</th><th>elo</th></tr>';
+    const head=document.createElement('thead');head.innerHTML='<tr><th>place / player</th><th>status</th><th>wpm</th><th>raw</th><th>accuracy</th><th>mistakes</th><th>time</th><th>elo</th></tr>';
     const body=document.createElement('tbody');
-    [...m.players].sort((a,b)=>(a.elapsed??Infinity)-(b.elapsed??Infinity)||b.accuracy-a.accuracy).forEach((p,i)=>{
-      const tr=document.createElement('tr');
-      if(p.id===me)tr.className='score-you';
+    [...m.players].sort((a,b)=>Number(b.finished)-Number(a.finished)||(a.finished&&b.finished?(a.finishOrder||0)-(b.finishOrder||0):a.elapsed-b.elapsed)||b.accuracy-a.accuracy).forEach((p,i)=>{
+      const tr=document.createElement('tr');if(p.id===me)tr.className='score-you';
       const rating=m.ratings?.[p.id],delta=rating?.delta;
-      const fields=[`#${i+1}  ${p.name}${p.id===me?' (You)':''}`,String(p.wpm??0),String(p.rawWpm??0),`${p.accuracy??100}%`,String(p.errors??0),p.elapsed==null?'DNF':`${p.elapsed}s`,delta===undefined?'—':`${delta>=0?'+':''}${delta}`];
-      fields.forEach((value,j)=>{const cell=document.createElement(j===0?'th':'td');cell.textContent=value;tr.append(cell);});
-      body.append(tr);
+      const fields=[`#${i+1}  ${p.name}${p.id===me?' (You)':''}`,p.finished?'finished':provisional?'typing…':'left early',String(p.wpm??0),String(p.rawWpm??0),`${p.accuracy??100}%`,String(p.errors??0),`${Number(p.elapsed??0).toFixed(1)}s`,delta===undefined?'—':`${delta>=0?'+':''}${delta}`];
+      fields.forEach((value,j)=>{const cell=document.createElement(j===0?'th':'td');cell.textContent=value;tr.append(cell);});body.append(tr);
     });table.append(head,body);board.append(table);box.append(board);
-    if(m.ratings?.[me]) {
-      user=m.ratings[me];updateProfile();
-      const delta=document.createElement('strong');delta.className='elo-change';
-      delta.textContent=`${user.delta>=0?'+':''}${user.delta} Elo · now ${user.elo}`;
-      box.append(delta);
-    }
-    const returnButton=document.createElement('button');returnButton.className='primary';returnButton.textContent='back to multiplayer';
-    returnButton.onclick=()=>{send({type:'leave'});queued=false;showLobby();};
-    box.append(returnButton);
-    status(m.reason==='forfeit'?'A player left the match.': 'Match complete');
-    refreshLeaderboard();
+    if(!provisional && m.ratings?.[me]){user=m.ratings[me];updateProfile();const delta=document.createElement('strong');delta.className='elo-change';delta.textContent=`${user.delta>=0?'+':''}${user.delta} Elo · now ${user.elo}`;box.append(delta);}
+    if(!provisional){const returnButton=document.createElement('button');returnButton.className='primary';returnButton.textContent='back to multiplayer';returnButton.onclick=()=>{send({type:'leave'});queued=false;showLobby();};box.append(returnButton);}
+  }
+  function showFinished(m){
+    phase='finished';clearInterval(countdownTimer);$('raceInput').disabled=true;$('raceInput').blur();
+    $('raceCountdown').classList.remove('countdown-active');$('raceCountdown').textContent='finished';$('raceTimeLabel').textContent='race';
+    renderScoreboard(m,false);status(m.reason==='forfeit'?'A player left the match.':'Match complete');refreshLeaderboard();
   }
   function onMessage(m) {
     if(m.type==='hello') {me=m.id;clockOffset=Date.now()-(m.serverTime||Date.now());}
@@ -494,10 +510,11 @@
     }
     if(m.type==='playerFinished'){
       if(m.id===me){finishedMine=true;$('raceInput').disabled=true;$('raceInput').blur();
-        $('raceFinishNotice').textContent='You finished! Waiting for your opponent to complete the text…';
+        $('raceFinishNotice').textContent='Finished! Your results are below. The opponent can keep typing.';
         $('raceFinishNotice').classList.remove('hidden');
       } else {status(`${m.name} finished. Keep typing to the end!`);}
     }
+    if(m.type==='provisionalResults'&&finishedMine){renderScoreboard(m,true);$('raceResult').scrollIntoView({behavior:'smooth',block:'nearest'});}
     if(m.type==='finished')showFinished(m);
     if(m.type==='leftRoom') {if(room)showLobby();}
   }
@@ -537,14 +554,19 @@
     try {
       const response=await fetch('/api/leaderboard');const data=await response.json();
       const el=$('globalRanks');el.replaceChildren();
+      $('rankingCount').textContent=`${data.total??data.players?.length??0} players`;
       if(!data.players?.length){el.textContent='No ranked players yet. Be the first!';return;}
       data.players.forEach((p,i)=>{
         const row=document.createElement('div');row.className='ranking-row';
-        row.textContent=`#${i+1}   ${p.username}   ·   ${p.elo} Elo   ·   ${p.wins} wins · ${p.losses} losses`;
+        row.innerHTML='';const rank=document.createElement('span');rank.className='leaderboard-position';rank.textContent=`#${i+1}`;const name=document.createElement('strong');name.textContent=p.username;const rating=document.createElement('span');rating.className='leaderboard-elo';rating.textContent=`${p.elo} Elo`;const record=document.createElement('small');record.textContent=`${p.wins} wins · ${p.losses} losses`;row.append(rank,name,rating,record);
         el.append(row);
       });
-    }catch{}
+    }catch{$('globalRanks').textContent='Could not load the online rankings. Check your connection.';}
   }
+  window.addEventListener('undefinedtype:leaderboard',refreshLeaderboard);
+  setInterval(()=>{if(document.getElementById('leaderboards').classList.contains('active'))refreshLeaderboard();},30000);
+  async function storageStatus(){try{const res=await fetch('/api/status');const x=await res.json();const t=x.persistent?'Accounts are stored permanently in PostgreSQL.':'Heads up: this server uses temporary account storage. Set DATABASE_URL on Render to keep accounts after redeploys.';for(const id of ['welcomeStorageNotice','authStorageNotice'])$(id).textContent=t;$('leaderboardStorageNotice').textContent=x.persistent?'Worldwide rankings are saved in the database.':'Rankings are shared while this server runs, but may reset on redeploy until DATABASE_URL is connected.';}catch{}}
+  storageStatus();
   updateProfile();
   if (pendingInvite) document.querySelector('[data-page="multiplayer"]').click();
   loadLanguages();restoreAccount();refreshLeaderboard();connect();

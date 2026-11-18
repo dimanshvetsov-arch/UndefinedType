@@ -82,7 +82,7 @@ test('ranked queue auto-matches, starts without ready, and counts a forfeit in E
   a.receive({type:'leave'});
   await pause(60);
   const result=b.latest('finished');assert.equal(result.reason,'forfeit');assert.equal(result.winnerId,b.id);
-  assert.equal(result.ratings[b.id].elo,1016);assert.equal(result.ratings[a.id].elo,984);
+  assert.equal(result.ratings[b.id].elo,1000+engine.eloChange(1000,1000,1));assert.equal(result.ratings[a.id].elo,1000+engine.eloChange(1000,1000,0));
   assert.equal(engine.users.get('bob').wins,1);assert.equal(engine.users.get('alice').losses,1);
   const ranks=await (await fetch(base+'/api/leaderboard')).json();assert.equal(ranks.players[0].username,'Bob');
   b.receive({type:'leave'});a.close();b.close();
@@ -134,6 +134,7 @@ test('both racers must finish before unranked results, and corrected mistakes co
   const source=r.text;
   const wrong=source[0]==='x'?'y':'x';
   a.receive({type:'input',value:wrong}); // one mistake
+  a.receive({type:'input',value:''}); // allowed: fix an incorrect word
   for(let i=1;i<=source.length;i+=8)a.receive({type:'input',value:source.slice(0,Math.min(source.length,i+7))});
   assert.equal(r.players[0].finishedAt>0,true);
   assert.equal(r.status,'running','first finisher must not end the match');
@@ -200,4 +201,88 @@ test('unsupported language is rejected on the server',async()=>{
   assert.match(s.latest('error').message,/Unsupported text language/);assert.equal(s.room,null);
   s.receive({type:'queue',mode:'ranked',language:'xx'});
   assert.match(s.latest('error').message,/Unsupported text language/);assert.equal(engine.queue.includes(s),false);s.close();
+});
+
+
+test('correct words lock, wrong words can be fixed before moving to next word',async()=>{
+  const tokens=await Promise.all(['Alice','Bob'].map(async username=>(await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username,password:'strongPassword123'})})).json()));
+  const [a,b]=[makeSocket(),makeSocket()];
+  a.receive({type:'auth',token:tokens[0].token});b.receive({type:'auth',token:tokens[1].token});
+  a.receive({type:'create',visibility:'private',wordCount:30,language:'en'});
+  b.receive({type:'join',code:a.latest('room').code});
+  const r=engine.rooms.get(a.room);clearTimeout(r.timer);r.timer=null;r.status='running';r.startAt=Date.now()-30000;
+  const text=r.text, firstSpace=text.indexOf(' '),firstWord=text.slice(0,firstSpace);
+  assert.ok(firstSpace>2);
+  const playerA=r.players.find(x=>x.ws===a);
+  a.receive({type:'input',value:firstWord});
+  a.receive({type:'input',value:firstWord.slice(0,-1)});
+  assert.equal(playerA.typed,firstWord,'a correct word cannot be backspaced');
+  a.receive({type:'input',value:firstWord+' '});
+  a.receive({type:'input',value:firstWord});
+  assert.equal(playerA.typed,firstWord+' ','the separator after a correct word is locked');
+  const playerB=r.players.find(x=>x.ws===b);
+  const typo=(text[0]==='x'?'q':'x')+firstWord.slice(1);
+  b.receive({type:'input',value:typo});
+  b.receive({type:'input',value:typo+' '});
+  b.receive({type:'input',value:typo});
+  assert.equal(playerB.typed,typo,'space after an incorrect word can be erased');
+  for(let i=typo.length-1;i>=0;i--)b.receive({type:'input',value:typo.slice(0,i)});
+  assert.equal(playerB.typed,'','an incorrect word can be erased and corrected');
+  b.receive({type:'input',value:typo+' '});
+  b.receive({type:'input',value:typo+' '+text[firstSpace+1]});
+  b.receive({type:'input',value:typo+' '});
+  assert.equal(playerB.typed,typo+' '+text[firstSpace+1],'once next word has begun the prior word is locked');
+  b.receive({type:'leave'});a.receive({type:'leave'});a.close();b.close();
+});
+
+test('races finish even when a completed word contains an uncorrected error',async()=>{
+  const tokens=await Promise.all(['Alice','Bob'].map(async username=>(await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username,password:'strongPassword123'})})).json()));
+  const a=makeSocket(),b=makeSocket();
+  a.receive({type:'auth',token:tokens[0].token});b.receive({type:'auth',token:tokens[1].token});
+  a.receive({type:'create',visibility:'private',wordCount:30});b.receive({type:'join',code:a.latest('room').code});
+  const room=engine.rooms.get(a.room);clearTimeout(room.timer);room.timer=null;room.status='running';room.startAt=Date.now()-120000;
+  const original=room.text;
+  const typo=(original[0]==='x'?'y':'x')+original.slice(1);
+  for(let i=8;i<typo.length+8;i+=8) a.receive({type:'input',value:typo.slice(0,Math.min(i,typo.length))});
+  assert.ok(room.players[0].finishedAt>0,'a typo must not prevent completing the text');
+  assert.ok(room.players[0].errors>=1);
+  assert.equal(room.players[0].progress,100,'completed passage should show full progress');
+  for(let i=8;i<original.length+8;i+=8)b.receive({type:'input',value:original.slice(0,Math.min(i,original.length))});
+  assert.equal(room.status,'finished');
+  assert.equal(a.latest('finished').reason,'completed');
+  a.receive({type:'leave'});b.receive({type:'leave'});a.close();b.close();
+});
+
+test('higher rated accounts earn less Elo for winning against the same opponent',()=>{
+  assert.equal(engine.eloK(1000),34);
+  assert.ok(engine.eloK(1800)<engine.eloK(1000));
+  const gainNew=engine.eloChange(1000,1000,1);
+  const gainExperienced=engine.eloChange(1800,1000,1);
+  assert.ok(gainNew>gainExperienced, `${gainNew} must be greater than ${gainExperienced}`);
+  assert.ok(engine.eloChange(1000,1100,0)<0);
+});
+
+test('first finisher gets immediate provisional scoreboard; final board includes numeric time for both',async()=>{
+  const f=await register('FinishEarly');const g=await register('FinishLater');
+  const a=makeSocket(),b=makeSocket();a.receive({type:'auth',token:f.token});b.receive({type:'auth',token:g.token});
+  a.receive({type:'create',visibility:'private',wordCount:30});b.receive({type:'join',code:a.room});
+  const r=engine.rooms.get(a.room);clearTimeout(r.timer);r.status='running';r.startAt=Date.now()-25000;
+  function typeWhole(sock){for(let end=10;end<r.text.length+10;end+=10)sock.receive({type:'input',value:r.text.slice(0,Math.min(end,r.text.length))});}
+  typeWhole(a);
+  assert.equal(r.status,'running','The other player must still be allowed to race');
+  assert.equal(a.latest('provisionalResults').players.find(p=>p.id===a.id).finished,true);
+  assert.equal(a.latest('provisionalResults').players.find(p=>p.id===b.id).finished,false);
+  assert.ok(Number.isFinite(a.latest('provisionalResults').players.find(p=>p.id===b.id).elapsed));
+  assert.equal(b.latest('finished'),undefined,'Do not end for the second player');
+  typeWhole(b);
+  const final=a.latest('finished');assert.equal(final.winnerId,a.id);
+  assert.ok(final.players.every(p=>Number.isFinite(p.elapsed)), 'No DNF time');
+  assert.equal(final.players.every(p=>p.finished),true);
+  a.receive({type:'leave'});b.receive({type:'leave'});a.close();b.close();
+});
+
+test('status tells the visitor whether permanent storage is connected; leaderboard is server-wide',async()=>{
+  const status=await (await fetch(base+'/api/status')).json();assert.equal(status.persistent,false);assert.equal(status.storage,'temporary');
+  const ranking=await (await fetch(base+'/api/leaderboard')).json();assert.ok(ranking.total>=4);
+  assert.ok(ranking.players.some(p=>p.username==='FinishEarly'));
 });

@@ -26,10 +26,12 @@ const makeText = (words=80,language='en') => {
 };
 const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
 const respond = (res, code, data) => {res.writeHead(code, {'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options':'nosniff'}); res.end(JSON.stringify(data));};
-const publicUser = u => ({username:u.username, elo:u.elo || 1000, wins:u.wins || 0, losses:u.losses || 0, draws:u.draws || 0});
+const publicUser = u => ({username:u.username, elo:u.elo ?? 1000, wins:u.wins ?? 0, losses:u.losses ?? 0, draws:u.draws ?? 0});
+const eloK = rating => rating >= 2200 ? 12 : rating >= 1800 ? 16 : rating >= 1400 ? 22 : rating >= 1100 ? 28 : 34;
+const eloChange = (rating, opponentRating, outcome) => Math.round(eloK(rating)*(outcome - 1/(1+10**((opponentRating-rating)/400))));
 const usernameKey = str => String(str || '').trim().toLowerCase();
 const passwordHash = (password, salt) => crypto.scryptSync(password, salt, 64).toString('hex');
-const newPlayer = ws => ({ws, id:ws.id, user:ws.user, typed:'', position:0, correct:0, errors:0, strokes:0,missStrokes:0,progress:0, wpm:0, accuracy:100,finishedAt:0});
+const newPlayer = ws => ({ws, id:ws.id, user:ws.user, typed:'', position:0, correct:0, errors:0, strokes:0,missStrokes:0,lockedBefore:0,progress:0, wpm:0, accuracy:100,finishedAt:0,finishOrder:0});
 const uniqueCode = () => {let id; do {id=crypto.randomBytes(4).toString('hex').toUpperCase();} while(rooms.has(id)); return id;};
 
 // Signed tokens survive app restarts when SESSION_SECRET is stable. Do not send the secret to browsers.
@@ -113,13 +115,14 @@ function leave(ws) {
   if(i!==-1) {
     if(r.status==='running'&&r.players.length===2) {
       const opponent=r.players.find(p=>p.ws!==ws);
-      endMatch(r,'forfeit',opponent?.id||null);
+      const finished=r.players.find(p=>p.finishedAt);
+      endMatch(r,'forfeit',finished?.id||opponent?.id||null);
     }
     r.players.splice(i,1);
     if(r.status==='countdown') {
       clearTimeout(r.timer);
       r.status='waiting';r.startAt=0;r.text='';
-      for(const p of r.players) Object.assign(p,{typed:'',position:0,correct:0,errors:0,strokes:0,missStrokes:0,progress:0,wpm:0,accuracy:100,finishedAt:0});
+      for(const p of r.players) Object.assign(p,{typed:'',position:0,correct:0,errors:0,strokes:0,missStrokes:0,lockedBefore:0,progress:0,wpm:0,accuracy:100,finishedAt:0,finishOrder:0});
       broadcast(r,{type:'countdownCancelled',message:'Player left. Waiting for another opponent.'});
     }
   }
@@ -139,7 +142,7 @@ function join(ws,r) {
 }
 function createRoom(ws,visibility,ranked,wordCount=80,language='en') {
   leave(ws);
-  const r={code:uniqueCode(),visibility,ranked,language,duration:0,wordCount:[30,60,100,150].includes(wordCount)?wordCount:80,status:'waiting',players:[],startAt:0,text:'',timer:null,endTimer:null};
+  const r={code:uniqueCode(),visibility,ranked,language,duration:0,wordCount:[30,60,100,150].includes(wordCount)?wordCount:80,status:'waiting',players:[],startAt:0,text:'',timer:null,endTimer:null,finishSerial:0};
   rooms.set(r.code,r);join(ws,r);
   return r;
 }
@@ -158,26 +161,24 @@ async function endMatch(r,reason='time',forcedWinnerId=null) {
   if(r.status!=='running') return;
   r.status='finished';clearTimeout(r.endTimer);clearTimeout(r.timer);
   const scores=r.players.map(p=>{
-    const elapsed=p.finishedAt?(p.finishedAt-r.startAt)/1000:null;
-    const seconds=elapsed||Math.max(.01,(Date.now()-r.startAt)/1000);
+    const elapsed=Math.max(.01,((p.finishedAt||Date.now())-r.startAt)/1000);
+    const seconds=elapsed;
     return {id:p.id,name:p.user.username,
       wpm:Math.round((p.correct/5)/(seconds/60)),
       rawWpm:Math.round((p.strokes/5)/(seconds/60)),
       accuracy:p.accuracy, progress:p.progress,position:p.position,correct:p.correct,
-      elapsed:elapsed===null?null:Math.round(elapsed*10)/10,
-      errors:p.missStrokes, currentErrors:p.errors,strokes:p.strokes,finished:!!p.finishedAt};
+      elapsed:Math.round(elapsed*10)/10,
+      errors:p.missStrokes, currentErrors:p.errors,strokes:p.strokes,finished:!!p.finishedAt,finishOrder:p.finishOrder};
   });
-  const ordered=[...scores].sort((a,b)=>(a.elapsed??Infinity)-(b.elapsed??Infinity)||b.accuracy-a.accuracy);
-  const isDraw=!forcedWinnerId&&(ordered.length!==2||(ordered[0].elapsed===ordered[1].elapsed&&ordered[0].accuracy===ordered[1].accuracy));
+  const ordered=[...scores].sort((a,b)=>Number(b.finished)-Number(a.finished)||(a.finished&&b.finished?a.finishOrder-b.finishOrder:a.elapsed-b.elapsed)||b.accuracy-a.accuracy);
+  const isDraw=!forcedWinnerId&&(ordered.length!==2||(!ordered[0].finished&&!ordered[1].finished&&ordered[0].elapsed===ordered[1].elapsed));
   const winnerId=forcedWinnerId||(isDraw?null:ordered[0].id);
   const changes={};
   if(r.ranked&&r.players.length===2) {
     const [a,b]=r.players;
     const oldA=a.user.elo||1000,oldB=b.user.elo||1000;
-    const expected=1/(1+10**((oldB-oldA)/400));
     const score=isDraw?0.5:winnerId===a.id?1:0;
-    const delta=Math.round(32*(score-expected));
-    a.user.elo=Math.max(100,oldA+delta);b.user.elo=Math.max(100,oldB-delta);
+    a.user.elo=Math.max(100,oldA+eloChange(oldA,oldB,score));b.user.elo=Math.max(100,oldB+eloChange(oldB,oldA,1-score));
     for(const p of [a,b]) {const key=isDraw?'draws':winnerId===p.id?'wins':'losses';p.user[key]=(p.user[key]||0)+1;}
     changes[a.id]={...publicUser(a.user),delta:a.user.elo-oldA};
     changes[b.id]={...publicUser(b.user),delta:b.user.elo-oldB};
@@ -202,30 +203,49 @@ function checkQueue() {
     lobby();return;
   }
 }
+// One-step correction rule shared conceptually with the browser:
+// correctly typed words cannot be erased, and beginning a new word locks
+// every earlier word, including incorrectly typed ones.
+function canEraseRacerWord(value, reference, floor){
+  if(!value||value.length-1<floor)return false;
+  const end=value.endsWith(' ')?value.length-1:value.length;
+  const start=value.lastIndexOf(' ',end-1)+1;
+  return value.slice(start,end)!==reference.slice(start,end);
+}
 function acceptInput(ws, raw) {
   const r=rooms.get(ws.room);
   const p=r?.players.find(player=>player.ws===ws);
   if(!p||r.status!=='running'||p.finishedAt) return;
   if(typeof raw!=='string'||raw.length>r.text.length||raw.includes('\n')||raw.includes('\r')) return;
   const elapsedSeconds=Math.max(.01,(Date.now()-r.startAt)/1000);
-  // Drop impossible jumps and extremely fast input. Backspacing and fixing errors remain allowed.
+  // Prevent skipping forward, rewriting finished words, or backspacing past
+  // an already correct word. This must be enforced server-side as well.
   if(raw.length-p.typed.length>12 || raw.length>Math.floor(elapsedSeconds*30)+12) return;
   if(raw===p.typed) return;
   const before=p.typed;
-  let prefix=0;while(prefix<before.length&&prefix<raw.length&&before[prefix]===raw[prefix])prefix++;
+  if(raw===before.slice(0,-1)){
+    if(!canEraseRacerWord(before,r.text,p.lockedBefore))return;
+  }else if(raw.startsWith(before)&&raw.length>before.length){
+    for(let i=before.length;i<raw.length;i++){
+      if(i>0&&raw[i-1]===' ')p.lockedBefore=i;
+    }
+  }else return;
+  let prefix=before.length;
+  if(raw.length<before.length)prefix=raw.length;
   for(let i=prefix;i<raw.length;i++){p.strokes++;if(raw[i]!==r.text[i])p.missStrokes++;}
   p.typed=raw;p.position=raw.length;
   let correct=0;
   for(let i=0;i<raw.length;i++) if(raw[i]===r.text[i]) correct++;
   p.correct=correct;p.errors=raw.length-correct;
-  p.progress=Math.round(100*correct/r.text.length);
+  p.progress=Math.round(100*raw.length/r.text.length);
   p.wpm=Math.round(correct/5/(elapsedSeconds/60));
   p.accuracy=p.strokes?Math.round((p.strokes-p.missStrokes)/p.strokes*1000)/10:100;
   broadcast(r,{type:'progress',id:p.id,progress:p.progress,position:p.position,correct:p.correct,wpm:p.wpm,accuracy:p.accuracy});
-  if(raw.length===r.text.length && correct===r.text.length) {
-    p.finishedAt=Date.now();
+  if(raw.length===r.text.length) {
+    p.finishedAt=Date.now();p.finishOrder=++r.finishSerial;
     broadcast(r,{type:'playerFinished',id:p.id,name:p.user.username});
     if(r.players.every(player=>player.finishedAt)) endMatch(r,'completed');
+    else {const now=Date.now();send(ws,{type:'provisionalResults',winnerId:p.id,reason:'in progress',players:r.players.map(x=>{const elapsed=Math.max(.01,((x.finishedAt||now)-r.startAt)/1000);return {id:x.id,name:x.user.username,finished:!!x.finishedAt,elapsed:Math.round(elapsed*10)/10,wpm:Math.round((x.correct/5)/(elapsed/60)),rawWpm:Math.round((x.strokes/5)/(elapsed/60)),accuracy:x.accuracy,errors:x.missStrokes};})});}
   }
 }
 const allowedFiles=new Map([['/','index.html'],['/index.html','index.html'],['/style.css','style.css'],['/app.js','app.js'],['/multiplayer.js','multiplayer.js'],['/logo.png','logo.png']]);
@@ -237,9 +257,13 @@ const server=http.createServer((req,res)=>{
   let pathname;
   try {pathname=new URL(req.url,'http://localhost').pathname;}catch{return respond(res,400,{error:'Invalid URL'});}
   if(pathname==='/health')return respond(res,200,{ok:true});
+  if(pathname==='/api/status')return respond(res,200,{persistent:Boolean(database),storage:database?'postgresql':'temporary',accounts:users.size});
   if(pathname==='/api/languages' && req.method==='GET')return respond(res,200,{languages:Object.entries(languageBanks).map(([code,details])=>({code,english:details.english,native:details.native}))});
   if(pathname==='/api/me')return respond(res,200,{user:authRequest(req)?publicUser(authRequest(req)):null});
-  if(pathname==='/api/leaderboard')return respond(res,200,{players:[...users.values()].map(publicUser).sort((a,b)=>b.elo-a.elo||b.wins-a.wins).slice(0,50)});
+  if(pathname==='/api/leaderboard') {
+    if(database){Promise.all([database.query('SELECT username,elo,wins,losses,draws FROM undefinedtype_users ORDER BY elo DESC, wins DESC, username ASC LIMIT 100'),database.query('SELECT count(*)::int AS total FROM undefinedtype_users')]).then(([result,count])=>respond(res,200,{players:result.rows.map(publicUser),total:count.rows[0].total,persistent:true})).catch(e=>{console.error('Leaderboard error:',e);respond(res,503,{error:'Leaderboard unavailable'});});return;}
+    return respond(res,200,{players:[...users.values()].map(publicUser).sort((a,b)=>b.elo-a.elo||b.wins-a.wins).slice(0,100),total:users.size,persistent:false});
+  }
   if(pathname==='/api/auth'&&req.method==='POST') {
     const ip=String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').split(',')[0].trim();
     if(tooManyFailures(ip))return respond(res,429,{error:'Too many attempts. Try again later.'});
@@ -260,7 +284,7 @@ const server=http.createServer((req,res)=>{
       } else if(data.action==='login') {
         const claimedHash=passwordHash(password, u?.salt || 'invalid-user-salt');
         if(!u||!crypto.timingSafeEqual(Buffer.from(claimedHash,'hex'),Buffer.from(u.hash,'hex'))) {
-          recordFailure(ip);return respond(res,401,{error:'Incorrect username or password.'});
+          recordFailure(ip);return respond(res,401,{error:!u?'Account not found. Check your username or create an account.':'Incorrect password.'});
         }
       } else return respond(res,400,{error:'Unknown action'});
       return respond(res,200,{token:makeToken(key),user:publicUser(u)});
@@ -310,8 +334,8 @@ wss.on('connection',(ws,req)=>{
 const queueTimer=setInterval(checkQueue,1000);
 queueTimer.unref?.();
 async function start() {
-  try{await initializeStorage();server.listen(PORT,'0.0.0.0',()=>console.log(`UndefinedType v1.9 online at port ${PORT}`));}
+  try{await initializeStorage();server.listen(PORT,'0.0.0.0',()=>console.log(`UndefinedType v2.1 online at port ${PORT}`));}
   catch(e){console.error('Cannot start: storage initialization failed.',e);process.exitCode=1;}
 }
 if(require.main===module) start();
-module.exports={start,server,users,rooms,queue,checkQueue,makeToken,getUserFromToken,acceptInput,endMatch};
+module.exports={start,server,users,rooms,queue,checkQueue,makeToken,getUserFromToken,acceptInput,endMatch,eloChange,eloK};
