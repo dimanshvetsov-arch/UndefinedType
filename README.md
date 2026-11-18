@@ -1,4 +1,4 @@
-# UndefinedType v2.2 — reliable Backspace and word correction
+# UndefinedType v2.3 — no copy/paste in typing tests
 
 This is an update to the **existing** UndefinedType Node.js multiplayer website. Upload the **contents** of this ZIP to the root of the **same** GitHub repository and let the **same** Render Blueprint sync. The website URL does not need to change.
 
@@ -54,3 +54,12 @@ Server runs on `http://localhost:3000`. The unit/integration tests mock WebSocke
 - Phone Backspace detection uses a coarse-pointer + small-screen check; some hybrid devices with both mouse and touch may be treated as a phone when narrow.
 - Website sound effects depend on browser permissions, mute and device sound settings; websites cannot override browser/system mute.
 - A single Node.js server instance handles matchmaking. Multiple application replicas would need shared matchmaking infrastructure; a common PostgreSQL database alone does not synchronize running rooms.
+
+
+## v2.3 — Copy/paste protection in typing tests
+
+- Solo generated typing tests, Zen free-typing sessions, and online races reject clipboard paste (keyboard shortcuts, right-click Paste, and phone/IME `insertFromPaste`), plus dragging text into the typing area.
+- The displayed generated text cannot be selected/copied or dragged.
+- Direct input event fallbacks ignore paste-origin insertions even if the browser did not fire a cancelable paste event.
+- **Custom text setup still allows paste** to create a practice passage. Room invite links, login, and other normal fields also keep clipboard support.
+- Browser-side blocking is not proof against a modified client or bots; the server still validates race progress, and stronger anti-cheat would require additional server-side checks.

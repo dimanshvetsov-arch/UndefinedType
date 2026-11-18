@@ -431,3 +431,11 @@ footer{border-top:1px solid rgba(255,255,255,.05)}
 #raceResult .match-score-table{min-width:760px}
 @media(max-width:700px){.setting{align-items:flex-start}.settings-account{width:100%;justify-content:flex-start}.settings-account input{width:100%}.settings-account-actions{width:100%}.settings-account-actions button{flex:1}.ranking-row{grid-template-columns:42px 1fr 90px;gap:6px}.ranking-row small{grid-column:2/4;text-align:left}.ranking-row .leaderboard-elo{text-align:right}.restart{touch-action:manipulation}}
 @media(prefers-reduced-motion:reduce){.restart.restart-animate{animation:none}}
+
+/* v2.3: displayed test passages may not be selected, dragged, or copied.
+   Actual clipboard insertions are also rejected in JS for mouse/phone paste. */
+#wordsDisplay, #wordsDisplay *, #typingWrap, #raceSharedViewport, #raceSharedViewport * {
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+}

@@ -378,8 +378,25 @@
   // Native-script input methods can emit unfinished syllables: do not submit them.
   $('raceInput').addEventListener('compositionstart',()=>{composingRaceText=true;});
   $('raceInput').addEventListener('compositionend',()=>{composingRaceText=false;processRaceInput();});
-  $('raceInput').addEventListener('paste',e=>{e.preventDefault();status('Pasting is disabled during races.');});
-  $('raceInput').addEventListener('drop',e=>e.preventDefault());
+  function rejectPastedRaceText(e){
+    e.preventDefault();
+    status('Paste is disabled in typing races.');
+    syncRaceField();
+  }
+  function isClipboardRaceInput(e){
+    const kind=String(e?.inputType||'');
+    return kind.startsWith('insertFromPaste') || kind.startsWith('insertFromDrop') || kind==='insertFromYank';
+  }
+  $('raceInput').addEventListener('paste',rejectPastedRaceText);
+  $('raceSharedViewport').addEventListener('paste',rejectPastedRaceText);
+  $('raceSharedViewport').addEventListener('copy',e=>e.preventDefault());
+  $('raceSharedViewport').addEventListener('cut',e=>e.preventDefault());
+  $('raceSharedViewport').addEventListener('dragstart',e=>e.preventDefault());
+
+  $('raceInput').addEventListener('drop',rejectPastedRaceText);
+  $('raceSharedViewport').addEventListener('drop',rejectPastedRaceText);
+  $('raceInput').addEventListener('dragover',e=>e.preventDefault());
+  $('raceSharedViewport').addEventListener('dragover',e=>e.preventDefault());
   // Enter works like Space only when the passage expects a space,
   // such as at the end of a wrapped visual line.
   $('raceInput').addEventListener('keydown',e=>{
@@ -430,7 +447,8 @@
     showOwnText(next);playKeySound();send({type:'input',value:next});
     return true;
   }
-  function processRaceInput(){
+  function processRaceInput(e){
+    if(isClipboardRaceInput(e)){syncRaceField();return;}
     if(composingRaceText)return;
     if(phase!=='running'||finishedMine) {syncRaceField();return;}
     const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
@@ -440,6 +458,7 @@
   // Desktop Backspace and virtual-keyboard deletion use the exact same
   // controlled operation; the native textarea caret cannot get stuck midway.
   $('raceInput').addEventListener('beforeinput',e=>{
+    if(isClipboardRaceInput(e)){rejectPastedRaceText(e);return;}
     if(!String(e.inputType||'').startsWith('delete'))return;
     e.preventDefault();
     if(phase==='running'&&!finishedMine)commitRaceInput(typingValue.slice(0,-1));
