@@ -290,25 +290,29 @@ function saveTestResult(m){
  try{const all=storedResults();all.push(result);localStorage.setItem(RESULT_HISTORY_KEY,JSON.stringify(all.slice(-250)));}catch{}
  return result;
 }
-// Consistency is calculated using real typing strokes in equal 2-second windows.
-// Unlike an average-WPM graph, this reflects pauses and bursts of speed.
+// Consistency compares *real keystrokes* in equal 2-second windows.
+// The previous 100 * (1 - standardDeviation / mean) formula frequently
+// clamped normal, uneven typing to 0%. Squared coefficient of variation
+// produces a meaningful 1–100 score without hiding pauses or bursts.
+// Fewer than 4 strokes (or under 4 seconds) is not enough data: show —.
 function getConsistency(seconds,zen=false){
  const windowSeconds=2, fullWindows=Math.floor(seconds/windowSeconds);
- if(fullWindows<2)return null;
+ if(!Number.isFinite(seconds)||fullWindows<2)return null;
  const bins=Array(fullWindows).fill(0);
- if(zen){
-  for(const e of events)if(e.type==='zen-delta'&&Number.isFinite(e.t)){
-   const index=Math.floor(e.t/windowSeconds);if(index>=0&&index<fullWindows)bins[index]+=Math.max(0,e.count);
-  }
- }else{
-  for(const e of events)if(e.type==='input'&&Number.isFinite(e.t)){
-   const index=Math.floor(e.t/windowSeconds);if(index>=0&&index<fullWindows)bins[index]++;
-  }
+ for(const e of events){
+  if((zen ? e.type!=='zen-delta' : e.type!=='input') || !Number.isFinite(e.t))continue;
+  const index=Math.floor(e.t/windowSeconds);
+  if(index<0||index>=fullWindows)continue;
+  bins[index]+=zen?Math.max(0,Number(e.count)||0):1;
  }
- const mean=bins.reduce((a,b)=>a+b,0)/bins.length;
- if(mean<=0)return 0;
- const sd=Math.sqrt(bins.reduce((a,b)=>a+(b-mean)**2,0)/bins.length);
- return Math.max(0,Math.min(100,100*(1-sd/mean)));
+ const total=bins.reduce((sum,count)=>sum+count,0);
+ if(total<4)return null;
+ const mean=total/fullWindows;
+ const variance=bins.reduce((sum,count)=>sum+(count-mean)**2,0)/fullWindows;
+ const variation=variance/(mean*mean);
+ // A perfect even pace is 100%; interruptions reduce it smoothly.
+ // Unlike the old implementation, uneven but nonempty typing never shows 0%.
+ return Math.min(100,Math.max(1,100/(1+variation)));
 }
 function metrics(){
  const seconds=Math.max(.001,elapsed());

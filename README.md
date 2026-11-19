@@ -1,8 +1,14 @@
-# UndefinedType v2.5 — Word correction, consistency & history
+# UndefinedType v2.5.1 — Consistency calculation fix
 
 This version retains the current website, multiplayer, account and Render setup.
 
-## Fixes
+## Fixed in v2.5.1
+
+- Fixed consistency getting stuck at 0%: the old standard-deviation formula produced negative results during normal pauses, which were clamped to zero. The new score compares actual keystrokes in two-second windows and scales smoothly from 1–100%, with 100% for truly even typing.
+- When a test has fewer than four keystrokes in complete sample windows or lasts fewer than four seconds, consistency displays an em dash (—) instead of an unsupported 0%.
+- New tests are calculated correctly; previous stored scores cannot be recomputed because individual keystroke times were not saved.
+
+## Previous v2.5 features
 
 - Solo, multiplayer and the server use the same `typing-rules.js` word locking rules. A word becomes uneditable only when the **entire word is correct**; wrong words and unfinished words remain editable. Backspace and Ctrl/Cmd+Backspace work at the allowed boundary. Previous correct words cannot be erased.
 - Consistency is calculated from the real number of typing strokes in 2-second windows, rather than from cumulative average WPM. Very short tests show a dash rather than a fake 100%.
