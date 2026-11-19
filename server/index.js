@@ -227,8 +227,10 @@ function acceptInput(ws, raw) {
   if(raw.length-p.typed.length>12 || raw.length>Math.floor(elapsedSeconds*30)+12) return;
   if(raw===p.typed) return;
   const before=p.typed;
-  if(raw===before.slice(0,-1)){
-    if(!canEraseRacerWord(before,r.text,p.lockedBefore,p.correctionStart))return;
+  const deletingOne=raw===before.slice(0,-1);
+  const deletingWord=raw.length<before.length&&raw===before.slice(0,racerWordStart(before));
+  if(deletingOne||deletingWord){
+    if(raw.length<p.lockedBefore||!canEraseRacerWord(before,r.text,p.lockedBefore,p.correctionStart))return;
     if(!raw||raw.endsWith(' '))p.correctionStart=null;
   }else if(raw.startsWith(before)&&raw.length>before.length){
     for(let i=before.length;i<raw.length;i++){

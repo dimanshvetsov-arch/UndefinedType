@@ -427,8 +427,10 @@
   }
   function commitRaceInput(next){
     if(next===typingValue)return false;
-    if(next===typingValue.slice(0,-1)){
-      if(!mayEraseRaceWord(typingValue))return false;
+    const oneLetter=next===typingValue.slice(0,-1);
+    const wholeWord=next.length<typingValue.length&&next===typingValue.slice(0,wordStart(typingValue));
+    if(oneLetter||wholeWord){
+      if(!mayEraseRaceWord(typingValue)||next.length<typingLock)return false;
       // A correction stays unlocked until the active word is fixed or empty.
       if(!next||next.endsWith(' '))correctionStart=null;
     }else if(next.startsWith(typingValue)&&next.length<=matchText.length){
@@ -447,27 +449,39 @@
     showOwnText(next);playKeySound();send({type:'input',value:next});
     return true;
   }
+  function eraseRaceText(byWord=false){
+    if(phase!=='running'||finishedMine)return false;
+    const target=byWord?typingValue.slice(0,wordStart(typingValue)):typingValue.slice(0,-1);
+    return commitRaceInput(target);
+  }
   function processRaceInput(e){
     if(isClipboardRaceInput(e)){syncRaceField();return;}
     if(composingRaceText)return;
     if(phase!=='running'||finishedMine) {syncRaceField();return;}
-    const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
-    commitRaceInput(val);
+    const kind=String(e.inputType||'');
+    // Soft keyboards can deliver input without a cancelable beforeinput.
+    // Always use our controlled deletion, not a browser-modified caret.
+    if(kind.startsWith('delete'))eraseRaceText(/delete(?:Word|SoftLine|HardLine)/.test(kind));
+    else {
+      const val=$('raceInput').value.slice(0,matchText.length).replace(/[\n\r]/g,'');
+      commitRaceInput(val);
+    }
     syncRaceField();
   }
   // Desktop Backspace and virtual-keyboard deletion use the exact same
   // controlled operation; the native textarea caret cannot get stuck midway.
   $('raceInput').addEventListener('beforeinput',e=>{
     if(isClipboardRaceInput(e)){rejectPastedRaceText(e);return;}
-    if(!String(e.inputType||'').startsWith('delete'))return;
+    const kind=String(e.inputType||'');
+    if(!kind.startsWith('delete'))return;
     e.preventDefault();
-    if(phase==='running'&&!finishedMine)commitRaceInput(typingValue.slice(0,-1));
+    if(!composingRaceText)eraseRaceText(/delete(?:Word|SoftLine|HardLine)/.test(kind));
     syncRaceField();
   });
   $('raceInput').addEventListener('keydown',e=>{
-    if(e.key==='Backspace'&&!e.isComposing&&!composingRaceText){
+    if((e.key==='Backspace'||e.key==='Delete')&&!e.isComposing&&!composingRaceText){
       e.preventDefault();
-      if(phase==='running'&&!finishedMine)commitRaceInput(typingValue.slice(0,-1));
+      eraseRaceText(e.ctrlKey||e.metaKey||e.altKey);
       syncRaceField();
     }
   });

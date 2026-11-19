@@ -312,3 +312,31 @@ test('Backspace can fully erase a misspelled active word without unlocking previ
   assert.equal(player.typed,first+' ','previous completed correct word must stay locked');
   a.receive({type:'leave'});b.receive({type:'leave'});a.close();b.close();
 });
+
+test('Ctrl+Backspace can atomically erase only the active wrong word on the multiplayer server', async()=>{
+  const tokens=await Promise.all(['Alice','Bob'].map(async username=>(await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username,password:'strongPassword123'})})).json()));
+  const a=makeSocket(),b=makeSocket();
+  a.receive({type:'auth',token:tokens[0].token});b.receive({type:'auth',token:tokens[1].token});
+  a.receive({type:'create',visibility:'private',wordCount:30});b.receive({type:'join',code:a.room});
+  const r=engine.rooms.get(a.room);clearTimeout(r.timer);r.timer=null;r.status='running';r.startAt=Date.now()-25000;
+  const player=r.players.find(x=>x.ws===a);
+  const words=r.text.split(' '),first=words[0],second=words[1];
+  const bad='x'===first[0]?'y':'x';
+  const wrong=bad+first.slice(1);
+  for(let end=1;end<=wrong.length;end+=4)a.receive({type:'input',value:wrong.slice(0,end)});
+  a.receive({type:'input',value:wrong});
+  a.receive({type:'input',value:wrong+' '});
+  a.receive({type:'input',value:''});
+  assert.equal(player.typed,'','server must accept word-size deletion of wrong word after separator');
+  // A correct completed first word is locked.
+  a.receive({type:'input',value:first+' '});
+  a.receive({type:'input',value:''});
+  assert.equal(player.typed,first+' ','server must never delete correct previous word');
+  const wrongSecond=(second[0]==='x'?'y':'x')+second.slice(1);
+  a.receive({type:'input',value:first+' '+wrongSecond});
+  a.receive({type:'input',value:first+' '});
+  assert.equal(player.typed,first+' ','server may erase only current wrong word');
+  a.receive({type:'input',value:first});
+  assert.equal(player.typed,first+' ','cannot erase earlier locked word');
+  a.receive({type:'leave'});b.receive({type:'leave'});a.close();b.close();
+});
