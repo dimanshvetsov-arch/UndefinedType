@@ -36,7 +36,7 @@ const additionalBanks={
  fil:'ang ng sa at ay mga ako ikaw siya kami tayo kayo sila ito iyon para mula may wala hindi oo oras salita mga salita sumulat mabilis tipahan mundo tao bahay paaralan bago maganda',
 };
 const bankKey=code=>'undefinedtype-bank-'+code;
-function getBank(code){return (code==='en' ? dictionaries.en : (additionalBanks[code]||extraBanks[code]||dictionaries[code]||'')).trim();}
+function getBank(code){return (window.UndefinedTypeWordBanks?.[code] || (code==='en' ? dictionaries.en : (additionalBanks[code]||extraBanks[code]||dictionaries[code]||''))).trim();}
 // The menu displays both the English and native language names and searches both.
 const englishLanguageNames={en:'English',de:'German',es:'Spanish',fr:'French',ru:'Russian',pt:'Portuguese',it:'Italian',nl:'Dutch',pl:'Polish',uk:'Ukrainian',tr:'Turkish',ar:'Arabic',hi:'Hindi',zh:'Chinese',ja:'Japanese',ko:'Korean',sv:'Swedish',no:'Norwegian',da:'Danish',fi:'Finnish',cs:'Czech',sk:'Slovak',hu:'Hungarian',ro:'Romanian',bg:'Bulgarian',el:'Greek',he:'Hebrew',id:'Indonesian',ms:'Malay',vi:'Vietnamese',th:'Thai',fa:'Persian',ur:'Urdu',bn:'Bengali',ta:'Tamil',te:'Telugu',mr:'Marathi',gu:'Gujarati',pa:'Punjabi',sw:'Swahili',af:'Afrikaans',sq:'Albanian',hy:'Armenian',az:'Azerbaijani',eu:'Basque',be:'Belarusian',bs:'Bosnian',ca:'Catalan',hr:'Croatian',et:'Estonian',fil:'Filipino',gl:'Galician',ka:'Georgian',is:'Icelandic',ga:'Irish',kk:'Kazakh',km:'Khmer',lo:'Lao',lv:'Latvian',lt:'Lithuanian',mk:'Macedonian',mn:'Mongolian',ne:'Nepali',sr:'Serbian',sl:'Slovenian',so:'Somali',uz:'Uzbek',cy:'Welsh',yi:'Yiddish',zu:'Zulu'};
 // Starter native-script word lists for languages not covered by the original banks.
@@ -270,28 +270,159 @@ function reset(){
 }
 function begin(){if(started)return;started=true;startedAt=performance.now();const mySession=session;timerId=setInterval(()=>{if(mySession!==session)return;updateStats();if(mode==='time'&&elapsed()>=Number(length))finish();},100);}
 function elapsed(){return started?(performance.now()-startedAt)/1000:0;}
+// Historical results are saved on this device, not published to Elo rankings.
+const RESULT_HISTORY_KEY='undefinedtype-test-history-v25';
+function storedResults(){
+ try{
+  const data=JSON.parse(localStorage.getItem(RESULT_HISTORY_KEY)||'null');
+  if(Array.isArray(data))return data.filter(r=>r&&Number.isFinite(r.wpm)).slice(-250);
+  // An old personal-best record is still a real past result. Import it once.
+  const old=JSON.parse(localStorage.getItem('undefinedtype-records')||'{}');
+  return Object.values(old).filter(r=>r&&Number.isFinite(r.wpm)&&r.date).map(r=>({
+   date:r.date,wpm:r.wpm,accuracy:r.accuracy,mode:r.mode,lang:r.lang,length:r.length,importedBest:true
+  })).sort((a,b)=>a.date.localeCompare(b.date)).slice(-250);
+ }catch{return [];}
+}
+function saveTestResult(m){
+ const result={date:new Date().toISOString(),mode,lang,length:String(length),wpm:Number(m.wpm.toFixed(1)),
+  raw:Number(m.raw.toFixed(1)),accuracy:m.accuracy===null?null:Number(m.accuracy.toFixed(1)),
+  consistency:m.consistency===null?null:Number(m.consistency.toFixed(1)),seconds:Number(m.seconds.toFixed(1))};
+ try{const all=storedResults();all.push(result);localStorage.setItem(RESULT_HISTORY_KEY,JSON.stringify(all.slice(-250)));}catch{}
+ return result;
+}
+// Consistency is calculated using real typing strokes in equal 2-second windows.
+// Unlike an average-WPM graph, this reflects pauses and bursts of speed.
+function getConsistency(seconds,zen=false){
+ const windowSeconds=2, fullWindows=Math.floor(seconds/windowSeconds);
+ if(fullWindows<2)return null;
+ const bins=Array(fullWindows).fill(0);
+ if(zen){
+  for(const e of events)if(e.type==='zen-delta'&&Number.isFinite(e.t)){
+   const index=Math.floor(e.t/windowSeconds);if(index>=0&&index<fullWindows)bins[index]+=Math.max(0,e.count);
+  }
+ }else{
+  for(const e of events)if(e.type==='input'&&Number.isFinite(e.t)){
+   const index=Math.floor(e.t/windowSeconds);if(index>=0&&index<fullWindows)bins[index]++;
+  }
+ }
+ const mean=bins.reduce((a,b)=>a+b,0)/bins.length;
+ if(mean<=0)return 0;
+ const sd=Math.sqrt(bins.reduce((a,b)=>a+(b-mean)**2,0)/bins.length);
+ return Math.max(0,Math.min(100,100*(1-sd/mean)));
+}
 function metrics(){
  const seconds=Math.max(.001,elapsed());
  if(mode==='zen'){
-  const value=$('#zenInput').value;
-  const length=Array.from(value).length;
-  const wpm=length/5/(seconds/60);
-  const speeds=history.map(x=>x.wpm);
-  let consistency=100;
-  if(speeds.length>2){const avg=speeds.reduce((a,b)=>a+b,0)/speeds.length;const sd=Math.sqrt(speeds.reduce((a,b)=>a+(b-avg)**2,0)/speeds.length);consistency=Math.max(0,Math.min(100,100*(1-sd/Math.max(avg,1))));}
-  return{wpm,raw:wpm,accuracy:null,consistency,correct:length,seconds,wordCount:countWords(value)};
+  const value=$('#zenInput').value,chars=Array.from(value).length;
+  const wpm=chars/5/(seconds/60);
+  return{wpm,raw:wpm,accuracy:null,consistency:getConsistency(seconds,true),correct:chars,seconds,wordCount:countWords(value)};
  }
  let correct=0;for(let i=0;i<typed.length;i++)if(typed[i]===source[i])correct++;
  const inputs=events.filter(e=>e.type==='input'),correctEvents=inputs.filter(e=>e.correct).length;
  const accuracy=inputs.length?correctEvents/inputs.length*100:100;
  const wpm=correct/5/(seconds/60),raw=inputs.length/5/(seconds/60);
- const speeds=history.map(x=>x.wpm);let consistency=100;
- if(speeds.length>2){const avg=speeds.reduce((a,b)=>a+b,0)/speeds.length;const sd=Math.sqrt(speeds.reduce((a,b)=>a+(b-avg)**2,0)/speeds.length);consistency=Math.max(0,Math.min(100,100*(1-sd/Math.max(avg,1))));}
- return{wpm,raw,accuracy,consistency,correct,seconds};
+ return{wpm,raw,accuracy,consistency:getConsistency(seconds),correct,seconds};
 }
-function updateStats(){const m=metrics();$('#timer').textContent=mode==='time'?String(Math.max(0,Math.ceil(Number(length)-m.seconds))):String(Math.floor(m.seconds));if(mode==='zen')$('#zenWords').textContent=String(m.wordCount);const sec=Math.floor(m.seconds);if(started&&(!history.length||history[history.length-1].t!==sec))history.push({t:sec,wpm:m.wpm,accuracy:m.accuracy??100});}
-function finish(){if(finished)return;updateStats();finished=true;clearInterval(timerId);const m=metrics();$('#typingStage').classList.add('hidden');$('#results').classList.remove('hidden');$('#results .eyebrow').textContent=mode==='zen'?`zen complete · ${m.wordCount} words`:'test complete';$('#finalWpm').textContent=Math.round(m.wpm);$('#finalAccuracy').textContent=m.accuracy===null?'free typing':Math.round(m.accuracy)+'%';$('#finalRaw').textContent=Math.round(m.raw);$('#finalConsistency').textContent=Math.round(m.consistency)+'%';drawGraph();if(mode!=='custom'&&mode!=='zen'&&m.seconds>1){const key=`${mode}:${length}:${lang}:${punctuation}:${numbers}`;const records=JSON.parse(localStorage.getItem('undefinedtype-records')||'{}');if(!records[key]||m.wpm>records[key].wpm){records[key]={wpm:m.wpm,accuracy:m.accuracy,date:new Date().toISOString(),mode,length,lang};localStorage.setItem('undefinedtype-records',JSON.stringify(records));}}}
-function drawGraph(){const canvas=$('#graph'),ctx=canvas.getContext('2d');const dpr=Math.min(devicePixelRatio||1,2);canvas.width=950*dpr;canvas.height=200*dpr;ctx.scale(dpr,dpr);ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--panel').trim();ctx.fillRect(0,0,950,200);const points=history.length?history:[{t:0,wpm:0,accuracy:100}];const max=Math.max(40,...points.map(p=>p.wpm))*1.15;ctx.strokeStyle='#424447';ctx.lineWidth=1;for(let i=1;i<=3;i++){let y=180-i*45;ctx.beginPath();ctx.moveTo(30,y);ctx.lineTo(930,y);ctx.stroke();}function line(field,color,scale){ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2.5;points.forEach((p,i)=>{const x=30+i/Math.max(1,points.length-1)*900,y=180-p[field]/scale*150;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();}line('wpm',getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),max);line('accuracy','#6b9eac',100);ctx.font='12px monospace';ctx.fillStyle='#929698';ctx.fillText('WPM',35,20);ctx.fillStyle='#6b9eac';ctx.fillText('accuracy',100,20);}
+function updateStats(){
+ const m=metrics();
+ $('#timer').textContent=mode==='time'?String(Math.max(0,Math.ceil(Number(length)-m.seconds))):String(Math.floor(m.seconds));
+ if(mode==='zen')$('#zenWords').textContent=String(m.wordCount);
+ const sec=Math.floor(m.seconds);
+ if(started&&(!history.length||history[history.length-1].t!==sec)){
+  const windowSeconds=Math.min(3,Math.max(.5,m.seconds));
+  const strokes=events.filter(e=>(e.type==='input'||e.type==='zen-delta')&&e.t>=Math.max(0,m.seconds-windowSeconds));
+  const correct=strokes.reduce((total,e)=>total+(e.type==='zen-delta'?e.count:(e.correct?1:0)),0);
+  const all=strokes.reduce((total,e)=>total+(e.type==='zen-delta'?e.count:1),0);
+  history.push({t:sec,wpm:correct/5*60/windowSeconds,accuracy:all?100*correct/all:100});
+ }
+}
+function finish(){
+ if(finished)return;
+ updateStats();finished=true;clearInterval(timerId);const m=metrics();
+ $('#typingStage').classList.add('hidden');$('#results').classList.remove('hidden');
+ $('#results .eyebrow').textContent=mode==='zen'?`zen complete · ${m.wordCount} words`:'test complete';
+ $('#finalWpm').textContent=Math.round(m.wpm);
+ $('#finalAccuracy').textContent=m.accuracy===null?'free typing':Math.round(m.accuracy)+'%';
+ $('#finalRaw').textContent=Math.round(m.raw);
+ $('#finalConsistency').textContent=m.consistency===null?'—':Math.round(m.consistency)+'%';
+ const result=saveTestResult(m);
+ drawGraph();drawProgressGraph(result);
+ if(mode!=='custom'&&mode!=='zen'&&m.seconds>1){
+  const key=`${mode}:${length}:${lang}:${punctuation}:${numbers}`;
+  try{const records=JSON.parse(localStorage.getItem('undefinedtype-records')||'{}');
+   if(!records[key]||m.wpm>records[key].wpm){records[key]={wpm:m.wpm,accuracy:m.accuracy,date:new Date().toISOString(),mode,length,lang};localStorage.setItem('undefinedtype-records',JSON.stringify(records));}
+  }catch{}
+ }
+}
+function chartSetup(canvas){
+ const ctx=canvas.getContext('2d'), dpr=Math.min(window.devicePixelRatio||1,2);
+ const width=Math.max(320,Math.round(canvas.getBoundingClientRect().width)||750),height=212;
+ canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
+ ctx.clearRect(0,0,width,height);ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--panel').trim()||'#222426';ctx.fillRect(0,0,width,height);
+ return{ctx,width,height};
+}
+function plotChart(canvas,series,title,subtitle){
+ const {ctx,width,height}=chartSetup(canvas),left=47,right=width-18,top=29,bottom=height-34;
+ const all=series.flatMap(s=>s.points.map(p=>p.value)).filter(Number.isFinite);
+ const maximum=Math.max(20,...all)*1.16;
+ ctx.lineWidth=1;ctx.strokeStyle='#3c4143';ctx.fillStyle='#949a9c';ctx.font='12px monospace';
+ for(let i=0;i<=4;i++){
+  const y=top+(bottom-top)*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();
+  ctx.fillText(String(Math.round(maximum*(4-i)/4)),6,y+4);
+ }
+ ctx.fillStyle='#c1c5c6';ctx.font='bold 12px monospace';ctx.fillText(title,left,16);
+ ctx.fillStyle='#8c9395';ctx.font='11px monospace';ctx.fillText(subtitle,right-Math.min(right-left,ctx.measureText(subtitle).width),16);
+ const maxPoints=Math.max(2,...series.map(s=>s.points.length));
+ for(const s of series){
+  ctx.strokeStyle=s.color;ctx.fillStyle=s.color;ctx.lineWidth=2.5;ctx.beginPath();
+  s.points.forEach((p,i)=>{const x=left+(right-left)*i/Math.max(1,maxPoints-1),y=bottom-(bottom-top)*p.value/maximum;
+   if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  });if(s.points.length)ctx.stroke();
+  s.points.forEach((p,i)=>{const x=left+(right-left)*i/Math.max(1,maxPoints-1),y=bottom-(bottom-top)*p.value/maximum;
+   ctx.beginPath();ctx.arc(x,y,s.points.length===1?4:2.7,0,2*Math.PI);ctx.fill();
+  });
+ }
+ ctx.fillStyle='#92989a';ctx.font='11px monospace';ctx.fillText('start',left,bottom+20);ctx.fillText('latest',right-ctx.measureText('latest').width,bottom+20);
+}
+function drawGraph(){
+ // Use raw key-event timestamps. This remains correct even if the test finishes
+ // between display timer ticks or the page is throttled in the background.
+ const seconds=Math.max(1,elapsed()),span=Math.min(3,seconds),steps=Math.min(160,Math.max(2,Math.ceil(seconds)));
+ const points=[];
+ for(let i=0;i<=steps;i++){
+  const t=i*seconds/steps;
+  const start=Math.max(0,t-span),duration=Math.max(.5,t-start);
+  const recent=events.filter(e=>(e.type==='input'||e.type==='zen-delta')&&e.t>=start&&e.t<=t);
+  const correct=recent.reduce((total,e)=>total+(e.type==='zen-delta'?e.count:(e.correct?1:0)),0);
+  points.push({value:(correct/5)*60/duration});
+ }
+ const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e2b714';
+ plotChart($('#graph'),[{points,color:accent}],'typing speed',`WPM · ${seconds.toFixed(1)} seconds`);
+}
+function drawProgressGraph(current){
+ const all=storedResults();
+ const comparable=all.filter(r=>r.mode===current.mode&&r.lang===current.lang&&String(r.length)===String(current.length));
+ const previous=comparable.at(-2),first=comparable[0];
+ const insight=$('#progressInsight');
+ if(!previous){insight.textContent='First result saved for this test type. Finish another one to see your improvement.';}
+ else{
+  const diff=current.wpm-previous.wpm,fromFirst=current.wpm-first.wpm;
+  const signed=n=>(n>=0?'+':'')+n.toFixed(1);
+  insight.textContent=`${signed(diff)} WPM vs your previous ${current.mode} ${current.length} result · ${signed(fromFirst)} WPM since your first saved matching test.`;
+ }
+ $('#progressCount').textContent=`${comparable.length} saved ${comparable.length===1?'test':'tests'} · this device`;
+ const recent=comparable.slice(-24);
+ const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e2b714';
+ plotChart($('#progressGraph'),[{points:recent.map(r=>({value:r.wpm})),color:accent}],'your progress','WPM · last '+recent.length+' matching tests');
+ const target=$('#recentTests');target.replaceChildren();
+ for(const r of comparable.slice(-6).reverse()){
+  const row=document.createElement('div');row.className='recent-test-row';
+  const date=document.createElement('span');date.textContent=new Date(r.date).toLocaleDateString();
+  const wpm=document.createElement('strong');wpm.textContent=Number(r.wpm).toFixed(1)+' WPM';
+  const accuracy=document.createElement('span');accuracy.textContent=r.accuracy===null||r.accuracy===undefined?'zen':Number(r.accuracy).toFixed(1)+'% accuracy';
+  row.append(date,wpm,accuracy);target.append(row);
+ }
+}
 function beep(){try{audio=audio||new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();const osc=audio.createOscillator(),gain=audio.createGain();osc.type='sine';osc.frequency.value=440+Math.random()*70;gain.gain.setValueAtTime(.015,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.035);osc.connect(gain);gain.connect(audio.destination);osc.start();osc.stop(audio.currentTime+.035);}catch{}}
 // Only actual typing is accepted in generated typing tests. Custom-text
 // authoring remains pasteable so users can bring their own practice passage.
@@ -326,27 +457,13 @@ function setCapsState(e){
 // A *completed* correct word is locked. Once a mistake is made within a
 // word, keep its correction window open even when erasing the wrong character
 // temporarily leaves a correct prefix. Starting the next word locks the last.
-function currentWordStart(value){
- const end=value.endsWith(' ')?value.length-1:value.length;
- return value.lastIndexOf(' ',end-1)+1;
-}
-function mayEraseWord(value, expected, floor=0, correctionStart=null){
- if(!value || value.length-1<floor)return false;
- const end=value.endsWith(' ')?value.length-1:value.length;
- const start=currentWordStart(value);
- return value.slice(start,end)!==expected.slice(start,end) || correctionStart===start;
-}
-// Backspace removes one character; Ctrl/Cmd/Option+Backspace removes only
-// the *current editable word*. Both operations stop at previously locked words.
+// All deletion methods share the same rule as the multiplayer server.
 function eraseSoloLetter(byWord=false){
- if(!mayEraseWord(typed,source,lockedBefore,correctionWordStart))return false;
- const start=currentWordStart(typed);
- const target=byWord?Math.max(start,lockedBefore):typed.length-1;
- if(target>=typed.length)return false;
+ const target=UndefinedTypeRules.backspaceTarget(typed,source,byWord);
+ if(target===null)return false;
  const oldLength=typed.length;
  typed=typed.slice(0,target);
- if(!typed||typed.endsWith(' '))correctionWordStart=null;
- events.push({type:byWord?'delete-word':'backspace'});
+ events.push({type:byWord?'delete-word':'backspace',t:elapsed()});
  for(let i=target;i<oldLength;i++)paintCharacter(i);
  moveCursor();updateStats();
  return true;
@@ -356,17 +473,14 @@ function pushText(text){
  if(!started)begin();
  for(const ch of Array.from(text)){
   extendInfiniteText();if(typed.length>=source.length)break;
-  if(typed.endsWith(' ')){lockedBefore=typed.length;correctionWordStart=null;}
-  const at=typed.length,wordStart=typed.lastIndexOf(' ')+1;
+  // Completed correct words are locked by UndefinedTypeRules.
+  const at=typed.length;
   const expected=source[at];
-  if(ch!==expected)correctionWordStart=wordStart;
-  events.push({type:'input',correct:ch===expected});typed+=ch;
+  // Wrong words remain editable even if their current prefix matches.
+  events.push({type:'input',correct:ch===expected,t:elapsed()});typed+=ch;
   // A corrected *complete* word is locked; partial words are still editable
   // when a mistake was made earlier in that word.
-  const after=source[typed.length];
-  const end=typed.endsWith(' ')?typed.length-1:typed.length;
-  const start=currentWordStart(typed);
-  if((after===' '||after===undefined)&&typed.slice(start,end)===source.slice(start,end))correctionWordStart=null;
+  // Word locking is calculated from the full typed text.
   paintCharacter(typed.length-1);
   if(typed.length>=source.length&&mode!=='time'){moveCursor();updateStats();finish();break;}
  }
@@ -395,4 +509,4 @@ function input(e){
 function showPage(name){$$('.page').forEach(p=>p.classList.toggle('active',p.id===name));$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===name));if(name==='leaderboards')window.dispatchEvent(new Event('undefinedtype:leaderboard'));if(name==='test')requestAnimationFrame(focusTyping);}
 function share(){const c=document.createElement('canvas');c.width=1100;c.height=580;const x=c.getContext('2d');x.fillStyle='#181a1b';x.fillRect(0,0,1100,580);x.fillStyle='#e2b714';x.font='bold 50px monospace';x.fillText('undefinedtype',75,100);x.fillStyle='#8a8e8f';x.font='24px monospace';x.fillText('typing test result',75,155);x.fillStyle='#e2b714';x.font='bold 130px monospace';x.fillText($('#finalWpm').textContent,75,345);x.font='28px monospace';x.fillText('WPM',85,395);x.fillStyle='#ddd';x.font='40px monospace';x.fillText($('#finalAccuracy').textContent+' accuracy',430,325);x.fillText($('#finalConsistency').textContent+' consistency',430,390);x.fillStyle='#777';x.font='20px monospace';x.fillText(`${mode} · ${length} · ${lang}`,75,500);const link=document.createElement('a');link.download='undefinedtype-result.png';link.href=c.toDataURL('image/png');link.click();}
 $$('.nav').forEach(b=>b.onclick=()=>showPage(b.dataset.page));$('#home').onclick=e=>{e.preventDefault();showPage('test');};$$('#modes button').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;length=lengths[mode][mode==='time'?1:0];customApproved=false;configure();reset();});$('#punctuation').onclick=()=>{punctuation=!punctuation;configure();reset();};$('#numbers').onclick=()=>{numbers=!numbers;configure();reset();};
-$('#applyCustom').onclick=()=>{if(!$('#customText').value.trim())return;customApproved=true;reset();};$('#customText').addEventListener('input',()=>{$('#applyCustom').disabled=!$('#customText').value.trim();$('#customCounter').textContent=Array.from($('#customText').value).length+' characters';customApproved=false;if(source||started)reset();});$('#restart').onclick=()=>{const button=$('#restart');button.classList.remove('restart-animate');void button.offsetWidth;button.classList.add('restart-animate');reset();};$('#restart').addEventListener('animationend',()=>$('#restart').classList.remove('restart-animate'));$('#finishZen').onclick=()=>{if(started&&!finished)finish();};$('#again').onclick=()=>reset();$('#share').onclick=share;$('#typingWrap').onclick=focusTyping;$('#typeInput').addEventListener('compositionstart',()=>{composing=true;});$('#typeInput').addEventListener('compositionend',e=>{composing=false;lastCommittedComposition=e.data||'';$('#typeInput').value='';pushText(lastCommittedComposition);});$('#typeInput').addEventListener('beforeinput',e=>{if(String(e.inputType||'').startsWith('delete')){e.preventDefault();if(!composing&&mode!=='zen'&&!finished)eraseSoloLetter(/delete(?:Word|SoftLine|HardLine)/.test(e.inputType||''));}});$('#typeInput').addEventListener('input',e=>{if(isClipboardInsertion(e)){$('#typeInput').value='';return;}if(!composing&&String(e.inputType||'').startsWith('delete'))eraseSoloLetter(/delete(?:Word|SoftLine|HardLine)/.test(e.inputType||''));else if(!composing&&e.data&&!e.isComposing){if(e.data!==lastCommittedComposition){pushText(e.data);}lastCommittedComposition=null;}$('#typeInput').value='';});$('#zenInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();if(started&&!finished)finish();} });$('#zenInput').addEventListener('input',e=>{if(isClipboardInsertion(e)){$('#zenInput').value=lastSafeZenText;return;}lastSafeZenText=$('#zenInput').value;if(mode!=='zen'||finished)return;if(!started&&$('#zenInput').value.length)begin();updateStats();});document.addEventListener('keydown',input);document.addEventListener('keyup',setCapsState);window.addEventListener('blur',()=>$('#capsNotice').classList.add('hidden'));$('#accent').value=settings.accent||'#e2b714';$('#background').value=settings.background||'#181a1b';function theme(){document.documentElement.style.setProperty('--accent',$('#accent').value);document.documentElement.style.setProperty('--bg',$('#background').value);}theme();$('#accent').oninput=()=>{settings.accent=$('#accent').value;theme();saveSettings();};$('#background').oninput=()=>{settings.background=$('#background').value;theme();saveSettings();};$('#resetTheme').onclick=()=>{$('#accent').value='#e2b714';$('#background').value='#181a1b';settings.accent='#e2b714';settings.background='#181a1b';theme();saveSettings();};setupLanguages();lang='en';$('#selectedLanguage').textContent=languageDisplay('en');configure();reset();
+$('#applyCustom').onclick=()=>{if(!$('#customText').value.trim())return;customApproved=true;reset();};$('#customText').addEventListener('input',()=>{$('#applyCustom').disabled=!$('#customText').value.trim();$('#customCounter').textContent=Array.from($('#customText').value).length+' characters';customApproved=false;if(source||started)reset();});$('#restart').onclick=()=>{const button=$('#restart');button.classList.remove('restart-animate');void button.offsetWidth;button.classList.add('restart-animate');reset();};$('#restart').addEventListener('animationend',()=>$('#restart').classList.remove('restart-animate'));$('#finishZen').onclick=()=>{if(started&&!finished)finish();};$('#again').onclick=()=>reset();$('#share').onclick=share;$('#typingWrap').onclick=focusTyping;$('#typeInput').addEventListener('compositionstart',()=>{composing=true;});$('#typeInput').addEventListener('compositionend',e=>{composing=false;lastCommittedComposition=e.data||'';$('#typeInput').value='';pushText(lastCommittedComposition);});$('#typeInput').addEventListener('beforeinput',e=>{if(String(e.inputType||'').startsWith('delete')){e.preventDefault();if(!composing&&mode!=='zen'&&!finished)eraseSoloLetter(/delete(?:Word|SoftLine|HardLine)/.test(e.inputType||''));}});$('#typeInput').addEventListener('input',e=>{if(isClipboardInsertion(e)){$('#typeInput').value='';return;}if(!composing&&String(e.inputType||'').startsWith('delete'))eraseSoloLetter(/delete(?:Word|SoftLine|HardLine)/.test(e.inputType||''));else if(!composing&&e.data&&!e.isComposing){if(e.data!==lastCommittedComposition){pushText(e.data);}lastCommittedComposition=null;}$('#typeInput').value='';});$('#zenInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();if(started&&!finished)finish();} });$('#zenInput').addEventListener('input',e=>{if(isClipboardInsertion(e)){$('#zenInput').value=lastSafeZenText;return;}const nextZenText=$('#zenInput').value;const delta=Math.max(0,Array.from(nextZenText).length-Array.from(lastSafeZenText).length);lastSafeZenText=nextZenText;if(mode!=='zen'||finished)return;if(!started&&nextZenText.length)begin();if(delta)events.push({type:'zen-delta',count:delta,t:elapsed()});updateStats();});document.addEventListener('keydown',input);document.addEventListener('keyup',setCapsState);window.addEventListener('blur',()=>$('#capsNotice').classList.add('hidden'));$('#accent').value=settings.accent||'#e2b714';$('#background').value=settings.background||'#181a1b';function theme(){document.documentElement.style.setProperty('--accent',$('#accent').value);document.documentElement.style.setProperty('--bg',$('#background').value);}theme();$('#accent').oninput=()=>{settings.accent=$('#accent').value;theme();saveSettings();};$('#background').oninput=()=>{settings.background=$('#background').value;theme();saveSettings();};$('#resetTheme').onclick=()=>{$('#accent').value='#e2b714';$('#background').value='#181a1b';settings.accent='#e2b714';settings.background='#181a1b';theme();saveSettings();};setupLanguages();lang='en';$('#selectedLanguage').textContent=languageDisplay('en');configure();reset();

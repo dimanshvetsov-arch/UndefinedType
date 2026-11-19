@@ -35,6 +35,8 @@ test('initialize server',async()=>{await new Promise(resolve=>server.listen(0,'1
   const health=await (await fetch(base+'/health')).json();assert.equal(health.ok,true);
   assert.equal((await fetch(base+'/server/users.json')).status,404);
   assert.equal((await fetch(base+'/README.md')).status,404);
+  assert.equal((await fetch(base+'/typing-rules.js')).status,200);
+  assert.equal((await fetch(base+'/wordbanks.js')).status,200);
   assert.equal((await fetch(base+'/')).status,200);
 });
 test('guest blocked, account signup, login and durable token',async()=>{
@@ -163,6 +165,7 @@ test('multiplayer languages match the solo banks and have no empty dictionaries'
   for(const code of ['en','de','es','ru','ja','zh','ar'])assert.ok(languages.some(x=>x.code===code));
   const file=require('../server/languages.json');
   assert.ok(Object.values(file).every(x=>x.bank.split(/\s+/).filter(Boolean).length>=5));
+  assert.ok(file.en.bank.split(/\s+/).filter(Boolean).length>=1700, 'English bank should contain over 1700 common words');
 });
 test('private room host chooses language and both players receive exactly its word bank',async()=>{
   const aToken=await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username:'Alice',password:'strongPassword123'})}).then(r=>r.json());
@@ -204,7 +207,7 @@ test('unsupported language is rejected on the server',async()=>{
 });
 
 
-test('correct words lock, wrong words can be fixed before moving to next word',async()=>{
+test('only completely correct words lock; unfinished or wrong words remain editable',async()=>{
   const tokens=await Promise.all(['Alice','Bob'].map(async username=>(await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username,password:'strongPassword123'})})).json()));
   const [a,b]=[makeSocket(),makeSocket()];
   a.receive({type:'auth',token:tokens[0].token});b.receive({type:'auth',token:tokens[1].token});
@@ -231,7 +234,9 @@ test('correct words lock, wrong words can be fixed before moving to next word',a
   b.receive({type:'input',value:typo+' '});
   b.receive({type:'input',value:typo+' '+text[firstSpace+1]});
   b.receive({type:'input',value:typo+' '});
-  assert.equal(playerB.typed,typo+' '+text[firstSpace+1],'once next word has begun the prior word is locked');
+  assert.equal(playerB.typed,typo+' ','the unfinished second word is still editable');
+  b.receive({type:'input',value:typo});
+  assert.equal(playerB.typed,typo,'the earlier wrong word is still editable when no correct word was completed');
   b.receive({type:'leave'});a.receive({type:'leave'});a.close();b.close();
 });
 

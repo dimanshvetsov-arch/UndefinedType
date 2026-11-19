@@ -1,26 +1,18 @@
-# UndefinedType v2.4 — Reliable correction + keyboard shortcuts
+# UndefinedType v2.5 — Word correction, consistency & history
 
-**Update your existing Render site:** Upload the extracted project files to the root of the same GitHub repository, replace older versions, click **Commit changes**, and let Render redeploy. Your existing URL does **not** change.
+This version retains the current website, multiplayer, account and Render setup.
 
-## Changes
+## Fixes
 
-- **Header:** The top-left wordmark now reads **UndefinedType**, with no space: white **Undefined** and accent-yellow **Type**. Both U and T are capitalized.
-- **Regular Backspace:** Correct mistakes in the active word. The correction remains open until you erase as much of that word as necessary, even if the remaining prefix looks correct.
-- **Ctrl+Backspace / Cmd+Backspace / Option+Backspace:** Delete the **current editable word** at once. This works in both solo and multiplayer.
-- **Delete key:** Also works as a backward correction at the end of the typing test.
-- **Phone/IME:** Supports `deleteContentBackward` and `deleteWordBackward`, including a fallback for keyboards sending only an input event.
-- **Word-locking rules:** A correctly completed word stays locked. A wrong word can be corrected until you begin typing the next word; earlier words remain protected.
-- **Multiplayer backend:** Accepts an atomic whole-word correction, rather than rejecting it because it removed more than one letter. Server rules still prevent changing locked words.
-- **Copy/paste protection:** Preserved from v2.3. The Custom Text *setup* still allows pasting, but typing-test inputs don't.
+- Solo, multiplayer and the server use the same `typing-rules.js` word locking rules. A word becomes uneditable only when the **entire word is correct**; wrong words and unfinished words remain editable. Backspace and Ctrl/Cmd+Backspace work at the allowed boundary. Previous correct words cannot be erased.
+- Consistency is calculated from the real number of typing strokes in 2-second windows, rather than from cumulative average WPM. Very short tests show a dash rather than a fake 100%.
+- Results show both the current test speed chart and a historical progress chart, showing WPM changes compared to previous **matching** tests (same mode, length and language), plus recent test results. Completed test data is saved in this browser's local storage, not shared between browsers or devices. Older personal-best records are imported once when available.
+- English word lists have been expanded from ~130 to **1817** unique independent/common words in `wordbanks.js` and `server/languages.json`, used for solo and multiplayer. Other language word lists are unchanged.
 
-## Install/update
+## Updating Render
 
-1. Extract the ZIP.
-2. In your existing UndefinedType GitHub repository, replace the old files with those from inside this project folder.
-3. Commit changes.
-4. In Render, use your existing service; wait for it to show **Live**.
-5. Hard-refresh with **Ctrl+Shift+R** on PC or reload the page on phone.
+Extract the ZIP and upload ALL project files to the same GitHub repository as before, including the new `typing-rules.js` and `wordbanks.js`. Commit to the `main` branch, and Render will redeploy to the existing link.
 
-For local tests, install dependencies with `npm install`, then run `npm run check` and `npm test`. Browser checks are in the `tests` folder.
+Run `npm test` and `npm run check` to verify server logic.
 
-**Note:** Accounts and global Elo need persistent PostgreSQL configured on Render. Without a database, data may disappear after redeployments.
+Note: local history is not the global Elo leaderboard. Global Elo still depends on the Render database configuration.

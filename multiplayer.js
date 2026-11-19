@@ -408,51 +408,27 @@
     const value=typingValue+(next==='\n'?'\n':' ');
     if(commitRaceInput(value))$('raceInput').value=value;
   });
-  // Wrong words stay editable through their last space, but once the next
-  // word starts the previous word cannot be changed. Correct words lock.
+  // Only a fully correct word locks. Wrong / unfinished words stay editable.
   let typingLock=0, correctionStart=null;
-  function wordStart(value){
-    const end=value.endsWith(' ')?value.length-1:value.length;
-    return value.lastIndexOf(' ',end-1)+1;
-  }
-  function mayEraseRaceWord(value){
-    if(!value||value.length-1<typingLock)return false;
-    const end=value.endsWith(' ')?value.length-1:value.length;
-    const start=wordStart(value);
-    return value.slice(start,end)!==matchText.slice(start,end)||correctionStart===start;
-  }
+  const wordStart=value=>UndefinedTypeRules.currentWordStart(value);
   function syncRaceField(){
     const field=$('raceInput');field.value=typingValue;
     try{field.setSelectionRange(field.value.length,field.value.length);}catch{}
   }
   function commitRaceInput(next){
     if(next===typingValue)return false;
-    const oneLetter=next===typingValue.slice(0,-1);
-    const wholeWord=next.length<typingValue.length&&next===typingValue.slice(0,wordStart(typingValue));
-    if(oneLetter||wholeWord){
-      if(!mayEraseRaceWord(typingValue)||next.length<typingLock)return false;
-      // A correction stays unlocked until the active word is fixed or empty.
-      if(!next||next.endsWith(' '))correctionStart=null;
+    if(next.length<typingValue.length){
+      if(!UndefinedTypeRules.validDeletion(typingValue,next,matchText))return false;
     }else if(next.startsWith(typingValue)&&next.length<=matchText.length){
-      for(let i=typingValue.length;i<next.length;i++){
-        if(i>0&&next[i-1]===' '){typingLock=i;correctionStart=null;}
-        if(next[i]!==matchText[i]){
-          const prefix=next.slice(0,i);
-          correctionStart=prefix.lastIndexOf(' ')+1;
-        }
-        const partial=next.slice(0,i+1);
-        const end=partial.endsWith(' ')?partial.length-1:partial.length;
-        const start=wordStart(partial);
-        if((matchText[partial.length]===' '||partial.length===matchText.length)&&partial.slice(start,end)===matchText.slice(start,end))correctionStart=null;
-      }
+      // Real typing input only; existing paste restrictions stay active.
     }else return false;
     showOwnText(next);playKeySound();send({type:'input',value:next});
     return true;
   }
   function eraseRaceText(byWord=false){
     if(phase!=='running'||finishedMine)return false;
-    const target=byWord?typingValue.slice(0,wordStart(typingValue)):typingValue.slice(0,-1);
-    return commitRaceInput(target);
+    const target=UndefinedTypeRules.backspaceTarget(typingValue,matchText,byWord);
+    return target===null?false:commitRaceInput(typingValue.slice(0,target));
   }
   function processRaceInput(e){
     if(isClipboardRaceInput(e)){syncRaceField();return;}

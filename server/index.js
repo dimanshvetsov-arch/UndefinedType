@@ -3,6 +3,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const TypingRules = require('../typing-rules.js');
 const {WebSocketServer, WebSocket} = require('ws');
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.PORT || 3000);
@@ -203,19 +204,6 @@ function checkQueue() {
     lobby();return;
   }
 }
-// Keep error-correction permission for the active word until it is fixed.
-// Otherwise Backspace can get stuck when deleting the last wrong letter
-// leaves a valid partial prefix (for example deleting 'x' from 'alx').
-function racerWordStart(value){
-  const end=value.endsWith(' ')?value.length-1:value.length;
-  return value.lastIndexOf(' ',end-1)+1;
-}
-function canEraseRacerWord(value,reference,floor,correctionStart=null){
-  if(!value||value.length-1<floor)return false;
-  const end=value.endsWith(' ')?value.length-1:value.length;
-  const start=racerWordStart(value);
-  return value.slice(start,end)!==reference.slice(start,end)||correctionStart===start;
-}
 function acceptInput(ws, raw) {
   const r=rooms.get(ws.room);
   const p=r?.players.find(player=>player.ws===ws);
@@ -227,20 +215,10 @@ function acceptInput(ws, raw) {
   if(raw.length-p.typed.length>12 || raw.length>Math.floor(elapsedSeconds*30)+12) return;
   if(raw===p.typed) return;
   const before=p.typed;
-  const deletingOne=raw===before.slice(0,-1);
-  const deletingWord=raw.length<before.length&&raw===before.slice(0,racerWordStart(before));
-  if(deletingOne||deletingWord){
-    if(raw.length<p.lockedBefore||!canEraseRacerWord(before,r.text,p.lockedBefore,p.correctionStart))return;
-    if(!raw||raw.endsWith(' '))p.correctionStart=null;
+  if(raw.length<before.length){
+    if(!TypingRules.validDeletion(before,raw,r.text))return;
   }else if(raw.startsWith(before)&&raw.length>before.length){
-    for(let i=before.length;i<raw.length;i++){
-      if(i>0&&raw[i-1]===' '){p.lockedBefore=i;p.correctionStart=null;}
-      if(raw[i]!==r.text[i])p.correctionStart=raw.slice(0,i).lastIndexOf(' ')+1;
-      const partial=raw.slice(0,i+1);
-      const end=partial.endsWith(' ')?partial.length-1:partial.length;
-      const start=racerWordStart(partial);
-      if((r.text[partial.length]===' '||partial.length===r.text.length)&&partial.slice(start,end)===r.text.slice(start,end))p.correctionStart=null;
-    }
+    // Server still enforces realistic typing speed and forward-only input.
   }else return;
   let prefix=before.length;
   if(raw.length<before.length)prefix=raw.length;
@@ -260,7 +238,7 @@ function acceptInput(ws, raw) {
     else {const now=Date.now();send(ws,{type:'provisionalResults',winnerId:p.id,reason:'in progress',players:r.players.map(x=>{const elapsed=Math.max(.01,((x.finishedAt||now)-r.startAt)/1000);return {id:x.id,name:x.user.username,finished:!!x.finishedAt,elapsed:Math.round(elapsed*10)/10,wpm:Math.round((x.correct/5)/(elapsed/60)),rawWpm:Math.round((x.strokes/5)/(elapsed/60)),accuracy:x.accuracy,errors:x.missStrokes};})});}
   }
 }
-const allowedFiles=new Map([['/','index.html'],['/index.html','index.html'],['/style.css','style.css'],['/app.js','app.js'],['/multiplayer.js','multiplayer.js'],['/logo.png','logo.png']]);
+const allowedFiles=new Map([['/','index.html'],['/index.html','index.html'],['/style.css','style.css'],['/app.js','app.js'],['/typing-rules.js','typing-rules.js'],['/wordbanks.js','wordbanks.js'],['/multiplayer.js','multiplayer.js'],['/logo.png','logo.png']]);
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png'};
 const authFailures=new Map();
 function recordFailure(ip) {const now=Date.now();const x=authFailures.get(ip)||{count:0,since:now};if(now-x.since>15*60*1000){x.count=0;x.since=now;}x.count++;authFailures.set(ip,x);}
