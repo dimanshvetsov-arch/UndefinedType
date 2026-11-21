@@ -165,7 +165,8 @@ test('multiplayer languages match the solo banks and have no empty dictionaries'
   for(const code of ['en','de','es','ru','ja','zh','ar'])assert.ok(languages.some(x=>x.code===code));
   const file=require('../server/languages.json');
   assert.ok(Object.values(file).every(x=>x.bank.split(/\s+/).filter(Boolean).length>=5));
-  assert.ok(file.en.bank.split(/\s+/).filter(Boolean).length>=1700, 'English bank should contain over 1700 common words');
+  assert.ok(file.en.bank.split(/\s+/).filter(Boolean).length>=650, 'English bank should have over 650 everyday words');
+  assert.ok(!file.en.bank.includes('tuberculous'), 'Unusually difficult words should not appear in the easy bank');
 });
 test('private room host chooses language and both players receive exactly its word bank',async()=>{
   const aToken=await fetch(base+'/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'login',username:'Alice',password:'strongPassword123'})}).then(r=>r.json());
