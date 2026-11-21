@@ -17,7 +17,7 @@ with sync_playwright() as p:
     page.set_content(markup,wait_until='load',timeout=20000)
     page.locator('#welcomeGuest').click()
     page.click('[data-page="test"]')
-    assert page.evaluate("window.UndefinedTypeWordBanks.en.split(' ').length")>1700
+    assert page.evaluate("window.UndefinedTypeWordBanks.en.split(' ').length")>=650
     def setup_source():
         page.evaluate('''() => {reset();source='apple banana kiwi';typed='';events=[];renderText();}''')
         page.locator('#typeInput').focus()

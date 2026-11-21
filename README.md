@@ -1,14 +1,14 @@
-# UndefinedType v2.5.2 — Easier English practice words
+# UndefinedType v2.5.3 — Easier typing words + interactive WPM graphs
 
-This update changes **English practice words only**. Other languages, account features, multiplayer modes, consistency, and results graphs remain unchanged.
+## Updates
+- Beginner-friendly **English** typing words: short, familiar, easy-to-type words such as *water*, *some*, *home*, *school*, and *happy*. More common words appear more often, but the larger everyday-word list keeps tests varied.
+- English vocabulary and word-selection rules match between solo and multiplayer: players receive identical text in a race.
+- **Hover a dot** on either WPM graph to see the precise WPM and, where relevant, the test number/date or time into the test.
+- **Tap graph dots on phone** or focus a graph and use left/right arrow keys to explore WPM values.
+- Existing features, other 69 languages, accounts, Elo, and Render settings are unchanged.
 
-- Removed rare medical, historical, and complicated English vocabulary in favor of familiar, everyday words.
-- English practice now uses **1159 different words**, mainly short, easy-to-recognize ones, with a few longer common words for variety.
-- The same English vocabulary is used for solo typing and for multiplayer rooms/ranked matches, so opponents always type from the same word bank.
-- All other 69 languages remain unchanged.
+## Deploy to your existing website
+Extract this ZIP. Upload and replace the files in your original GitHub repository. Make sure `typing-rules.js`, `wordbanks.js`, `server/languages.json`, `app.js`, `index.html`, and `style.css` are updated together. Commit. Your existing Render service should redeploy at the same URL.
 
-## Updating your existing Render website
-
-Extract the ZIP, upload **all** files (and folders) to the same GitHub repository as before, and click **Commit changes**. Render should deploy to your existing link.
-
-To check this release locally: `npm test` and `npm run check`. Node.js 20+ is required.
+## Tests
+Run `npm test` and `npm run check` (Node.js 20+). The browser hover test is `python tests/browser_graph_hover.py` (requires Playwright and Chromium).

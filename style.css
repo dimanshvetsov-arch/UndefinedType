@@ -458,3 +458,12 @@ footer{border-top:1px solid rgba(255,255,255,.05)}
 .recent-test-row strong{color:var(--accent);font-size:13px}
 #graph,#progressGraph{width:100%;height:212px;display:block;touch-action:pan-y}
 @media(max-width:600px){.progress-panel{padding:14px}.recent-test-row{grid-template-columns:.9fr .9fr 1.2fr;gap:6px;font-size:10px}.recent-test-row strong{font-size:11px}.result-grid{gap:9px}.result-grid strong{font-size:29px}}
+
+/* WPM tooltips on both graphs. Same design on desktop and touch devices. */
+.chart-shell{position:relative;width:100%;min-width:0}
+.chart-shell canvas{display:block}
+.chart-tooltip{position:absolute;z-index:8;pointer-events:none;transform:translate(-50%,-100%);background:#111416;border:1px solid var(--accent);box-shadow:0 8px 28px rgba(0,0,0,.42);padding:9px 13px;border-radius:8px;color:#fff;white-space:nowrap;font-size:12px;line-height:1.5;display:flex;flex-direction:column;gap:2px}
+.chart-tooltip strong{color:var(--accent);font-size:15px;font-variant-numeric:tabular-nums}
+.chart-tooltip span{font-size:11px;color:#aeb4b5}
+.chart-tooltip[hidden]{display:none}
+.chart-shell canvas:focus-visible{outline:2px solid var(--accent);outline-offset:3px}

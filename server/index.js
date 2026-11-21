@@ -23,7 +23,7 @@ let database;
 
 const makeText = (words=80,language='en') => {
   const bank=(languageBanks[language]?.bank||languageBanks.en.bank).split(/\s+/u).filter(Boolean);
-  return Array.from({length:words},()=>bank[crypto.randomInt(bank.length)]).join(' ');
+  return Array.from({length:words},()=>TypingRules.choosePracticeWord(bank,language,crypto.randomInt(1000000)/1000000)).join(' ');
 };
 const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
 const respond = (res, code, data) => {res.writeHead(code, {'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options':'nosniff'}); res.end(JSON.stringify(data));};

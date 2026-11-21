@@ -110,7 +110,11 @@ const lengths={time:[15,30,60,120],words:[10,25,50,100],quote:['short','medium',
 const settings=JSON.parse(localStorage.getItem('undefinedtype-settings')||'{}');let mode='time',length=30,lang='en',punctuation=false,numbers=false,source='',typed='',startedAt=0,finished=false,started=false,timerId=null,history=[],events=[],audio=null,session=0,focusRequested=false,lockedBefore=0,correctionWordStart=null;
 const saveSettings=()=>localStorage.setItem('undefinedtype-settings',JSON.stringify(settings));
 const undefinedtypeIsPhone=()=>window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 900px)').matches;
-function randWord(){const a=getBank(lang).split(/\s+/).filter(Boolean);return a.length?a[Math.floor(Math.random()*a.length)]:'';}
+const wordBankCache=new Map();
+function randWord(){
+ if(!wordBankCache.has(lang))wordBankCache.set(lang,getBank(lang).split(/\s+/u).filter(Boolean));
+ return window.UndefinedTypeRules.choosePracticeWord(wordBankCache.get(lang),lang,Math.random());
+}
 // Generate words in batches so timed and Zen tests never run out of lines.
 let generatedWords=0;
 let renderedChars=[];
@@ -365,8 +369,54 @@ function chartSetup(canvas){
  ctx.clearRect(0,0,width,height);ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--panel').trim()||'#222426';ctx.fillRect(0,0,width,height);
  return{ctx,width,height};
 }
+// The canvas itself cannot provide hover information, so cache its displayed
+// WPM points and show a small tooltip when the pointer is near a point.
+function enableChartTooltip(canvas) {
+ if(canvas.dataset.tooltipReady) return;
+ canvas.dataset.tooltipReady='true';
+ const tip=canvas.parentElement.querySelector('.chart-tooltip');
+ const hide=()=>{tip.hidden=true;};
+ const show=(point)=>{
+  const w=canvas.getBoundingClientRect().width;
+  const scaledX=point.x * w / (canvas._plotWidth || w);
+  tip.textContent='';
+  const score=document.createElement('strong');score.textContent=point.value.toFixed(1)+' WPM';
+  const label=document.createElement('span');label.textContent=point.label||'';
+  tip.append(score,label);
+  tip.style.left=Math.max(65,Math.min(w-65,scaledX))+'px';
+  tip.style.top=Math.max(20,point.y*(canvas.getBoundingClientRect().height/(canvas._plotHeight||212))-8)+'px';
+  tip.hidden=false;
+ };
+ const locate=(e,forTouch=false)=>{
+  const rect=canvas.getBoundingClientRect();
+  if(!rect.width||!rect.height){hide();return;}
+  const x=(e.clientX-rect.left)*(canvas._plotWidth/rect.width);
+  const y=(e.clientY-rect.top)*(canvas._plotHeight/rect.height);
+  let best=null,dist=Infinity;
+  for(const point of canvas._plotPoints||[]){
+    const d=Math.hypot(x-point.x,y-point.y);
+    if(d<dist){best=point;dist=d;}
+  }
+  if(best && dist<=(forTouch?24:14)){show(best);}else hide();
+ };
+ canvas.addEventListener('pointermove',e=>{if(e.pointerType!=='touch')locate(e);});
+ canvas.addEventListener('pointerdown',e=>locate(e,true));
+ canvas.addEventListener('pointerleave',hide);
+ canvas.addEventListener('keydown',e=>{
+  if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;
+  const points=canvas._plotPoints||[];
+  if(!points.length)return;
+  e.preventDefault();
+  const prev=Number(canvas.dataset.focusPoint||'-1');
+  const i=(prev+(e.key==='ArrowRight'?1:-1)+points.length)%points.length;
+  canvas.dataset.focusPoint=String(i);show(points[i]);
+ });
+ canvas.addEventListener('blur',hide);
+}
 function plotChart(canvas,series,title,subtitle){
  const {ctx,width,height}=chartSetup(canvas),left=47,right=width-18,top=29,bottom=height-34;
+ canvas._plotWidth=width;canvas._plotHeight=height;canvas._plotPoints=[];enableChartTooltip(canvas);
+ const tooltip=canvas.parentElement.querySelector('.chart-tooltip');if(tooltip)tooltip.hidden=true;
  const all=series.flatMap(s=>s.points.map(p=>p.value)).filter(Number.isFinite);
  const maximum=Math.max(20,...all)*1.16;
  ctx.lineWidth=1;ctx.strokeStyle='#3c4143';ctx.fillStyle='#949a9c';ctx.font='12px monospace';
@@ -383,7 +433,8 @@ function plotChart(canvas,series,title,subtitle){
    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
   });if(s.points.length)ctx.stroke();
   s.points.forEach((p,i)=>{const x=left+(right-left)*i/Math.max(1,maxPoints-1),y=bottom-(bottom-top)*p.value/maximum;
-   ctx.beginPath();ctx.arc(x,y,s.points.length===1?4:2.7,0,2*Math.PI);ctx.fill();
+   canvas._plotPoints.push({x,y,value:p.value,label:p.label||''});
+   ctx.beginPath();ctx.arc(x,y,s.points.length===1?4.7:3.7,0,2*Math.PI);ctx.fill();
   });
  }
  ctx.fillStyle='#92989a';ctx.font='11px monospace';ctx.fillText('start',left,bottom+20);ctx.fillText('latest',right-ctx.measureText('latest').width,bottom+20);
@@ -398,7 +449,7 @@ function drawGraph(){
   const start=Math.max(0,t-span),duration=Math.max(.5,t-start);
   const recent=events.filter(e=>(e.type==='input'||e.type==='zen-delta')&&e.t>=start&&e.t<=t);
   const correct=recent.reduce((total,e)=>total+(e.type==='zen-delta'?e.count:(e.correct?1:0)),0);
-  points.push({value:(correct/5)*60/duration});
+  points.push({value:(correct/5)*60/duration,label:`${t.toFixed(1)} seconds into the test`});
  }
  const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e2b714';
  plotChart($('#graph'),[{points,color:accent}],'typing speed',`WPM · ${seconds.toFixed(1)} seconds`);
@@ -417,7 +468,7 @@ function drawProgressGraph(current){
  $('#progressCount').textContent=`${comparable.length} saved ${comparable.length===1?'test':'tests'} · this device`;
  const recent=comparable.slice(-24);
  const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e2b714';
- plotChart($('#progressGraph'),[{points:recent.map(r=>({value:r.wpm})),color:accent}],'your progress','WPM · last '+recent.length+' matching tests');
+ plotChart($('#progressGraph'),[{points:recent.map((r,i)=>({value:r.wpm,label:`Test ${comparable.length-recent.length+i+1} · ${new Date(r.date).toLocaleDateString()}`})),color:accent}],'your progress','WPM · last '+recent.length+' matching tests');
  const target=$('#recentTests');target.replaceChildren();
  for(const r of comparable.slice(-6).reverse()){
   const row=document.createElement('div');row.className='recent-test-row';
